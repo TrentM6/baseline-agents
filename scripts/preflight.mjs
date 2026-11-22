@@ -13,6 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { parse } from "yaml";
+import { gatewayEnabled, envValue, envSlug } from "../core/config.mjs";
 
 const ROOT = process.env.AGENTS_ROOT ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const problems = [];
@@ -30,7 +31,8 @@ function load(rel, parser) {
   }
 }
 
-const gateway = load("config/gateway.yaml", parse) ?? {};
+const gatewayOn = gatewayEnabled();
+const gateway = load(gatewayOn ? "config/gateway.yaml" : "config/gateway.example.yaml", parse) ?? {};
 const callers = gateway.callers ?? {};
 const autoDoc = load("automations/automations.yaml", parse) ?? {};
 const automations = autoDoc.automations ?? {};
@@ -44,14 +46,15 @@ for (const [slug, a] of Object.entries(agents)) {
   if (!a.name) flag(`agent ${slug}`, "missing name");
   const persona = path.join("agents", a.persona || `personas/${slug}.md`);
   if (!exists(persona)) flag(`agent ${slug}`, `persona file missing: ${persona}`);
-  const caller = a.caller || `slack-${slug}`;
-  if (!callers[caller]) warn(`agent ${slug}`, `no callers.${caller} in config/gateway.yaml: the agent gets no gateway tools`);
+  const caller = a.caller || `agent-${slug}`;
+  if (gatewayOn && !callers[caller]) warn(`agent ${slug}`, `no callers.${caller} in config/gateway.yaml: the agent gets no gateway tools`);
   if (!exists(`memory/${slug}/MEMORY.md`)) warn(`agent ${slug}`, `no memory/${slug}/MEMORY.md: the agent runs without memory`);
-  if (!a.slackUserId) warn(`agent ${slug}`, "no slackUserId: teammates can't mention this agent until you add it");
+  // Only relevant once the agent is on Slack (its bot token is in .env).
+  if (!a.slackUserId && envValue(`SLACK_${envSlug(slug)}_BOT_TOKEN`)) warn(`agent ${slug}`, "no slackUserId: teammates can't mention this agent in Slack until you add it");
   for (const alias of a.reportsTo ?? []) {
     if (!channels[alias]) flag(`agent ${slug}`, `reportsTo "${alias}" is not a channel in config/channels.yaml`);
   }
-  if ((a.reportsTo ?? []).length && callers[caller] && !(callers[caller].allow ?? []).some((g) => g === "*" || g === "post_report")) {
+  if ((a.reportsTo ?? []).length && gatewayOn && callers[caller] && !(callers[caller].allow ?? []).some((g) => g === "*" || g === "post_report")) {
     warn(`agent ${slug}`, `has reportsTo but callers.${caller} doesn't allow post_report`);
   }
   if (a.crossPostChannels) flag(`agent ${slug}`, "crossPostChannels was replaced by reportsTo + config/channels.yaml");
@@ -78,14 +81,14 @@ for (const [name, a] of Object.entries(automations)) {
   const skills = a?.skills ?? [];
   if (skills.length && !tools.includes("Skill")) flag(where, `lists skills but does not grant "Skill"`);
   for (const s of skills) if (!exists(`.claude/skills/${s}/SKILL.md`)) flag(where, `skill not found: .claude/skills/${s}/SKILL.md`);
-  if (tools.some((t) => t === "mcp__gateway" || t.startsWith("mcp__gateway__")) && !callers[name]) {
+  if (gatewayOn && tools.some((t) => t === "mcp__gateway" || t.startsWith("mcp__gateway__")) && !callers[name]) {
     warn(where, `grants the gateway but config/gateway.yaml has no callers.${name}: it will see no gateway tools`);
   }
   if (a?.slack) flag(where, "the `slack:` block was replaced by `report: {as, to}`");
   if (a?.report) {
     if (!agents[a.report.as]) flag(where, `report.as "${a.report.as}" is not an agent in agents/agents.json`);
     for (const t of [].concat(a.report.to ?? [])) if (!channels[t]) flag(where, `report.to "${t}" is not a channel in config/channels.yaml`);
-    if (!(callers[name]?.allow ?? []).some((g) => g === "*" || g === "post_report")) flag(where, `has a report target but callers.${name} doesn't allow post_report`);
+    if (gatewayOn && !(callers[name]?.allow ?? []).some((g) => g === "*" || g === "post_report")) flag(where, `has a report target but callers.${name} doesn't allow post_report`);
     if (!tools.includes("mcp__gateway")) flag(where, `has a report target but doesn't grant "mcp__gateway"`);
   }
   for (const slot of a?.schedule ?? []) {
@@ -118,4 +121,4 @@ if (problems.length) {
   console.error(`\n${problems.length} problem(s). Fix them before running anything.`);
   process.exit(1);
 }
-console.log(`preflight ok: ${Object.keys(agents).length} agent(s), ${Object.keys(automations).length} automation(s), ${Object.keys(callers).length} gateway caller(s)`);
+console.log(`preflight ok: ${Object.keys(agents).length} agent(s), ${Object.keys(automations).length} automation(s), gateway ${gatewayOn ? `on (${Object.keys(callers).length} callers)` : "off"}`);

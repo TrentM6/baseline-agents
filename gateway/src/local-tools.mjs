@@ -165,7 +165,7 @@ export async function runLocalTool(name, args = {}, caller = "session") {
 
 /**
  * Who is posting, and where may they post? The caller decides, not the
- * arguments: an agent's turn (slack-<slug> or its own caller) posts only as
+ * arguments: an agent's turn (agent-<slug> or its own caller) posts only as
  * itself; an automation posts as its report.as; only the interactive session
  * (a human, or a subagent inside their Claude Code) may name `as`. In every
  * case the destination must be on that agent's reportsTo (or the automation's
@@ -173,7 +173,7 @@ export async function runLocalTool(name, args = {}, caller = "session") {
  */
 function resolveReporter(caller, args) {
   const agents = loadAgents();
-  const own = Object.entries(agents).find(([slug, a]) => (a.caller || `slack-${slug}`) === caller);
+  const own = Object.entries(agents).find(([slug, a]) => (a.caller || `agent-${slug}`) === caller);
   if (own) {
     const [slug, a] = own;
     if (args.as && args.as !== slug) return { error: `caller ${caller} may only post as ${slug}` };

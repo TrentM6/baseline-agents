@@ -18,7 +18,7 @@ import http from "node:http";
 import crypto from "node:crypto";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { ROOT, ENV_FILE, resolveAgent as resolveCore, loadSharedEnv, warnIfNoApiKey } from "../core/config.mjs";
+import { ROOT, ENV_FILE, resolveAgent as resolveCore, loadSharedEnv, warnIfNoApiKey, gatewayEnabled } from "../core/config.mjs";
 import { handleEvent, installShutdownHandlers, slackSecrets } from "./turn.mjs";
 
 // The core agent plus its live Slack credentials (re-read on every event).
@@ -154,7 +154,10 @@ async function handle(req, res) {
 /** Start the server. Exported so the offline selftest can boot it on a test port. */
 export function start(port = PORT) {
   loadSharedEnv();
-  if (!process.env.SLACK_AGENT_DRY_RUN) warnIfNoApiKey("slack-receiver");
+  if (!process.env.SLACK_AGENT_DRY_RUN) {
+    warnIfNoApiKey("slack-receiver");
+    if (!gatewayEnabled()) log("note: the gateway is off. Slack agents run unattended for anyone in the channel; consider npm run gateway:on for allowlists and a call log.");
+  }
   installShutdownHandlers();
   try { mkdirSync(path.join(ROOT, "logs/slack-agent"), { recursive: true }); } catch {}
   const server = http.createServer((req, res) => { handle(req, res).catch((e) => { log(`unhandled: ${e.message}`); try { sendText(res, 500, "error"); } catch {} }); });

@@ -3,7 +3,7 @@
 // Every surface (the CLI, Claude Code subagents, Slack, automations, the
 // gateway) reads agents from here, so an agent is defined once and behaves the
 // same wherever it runs. Nothing in this file knows about Slack.
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
@@ -18,6 +18,15 @@ export const ENV_FILE = process.env.AGENTS_ENV_FILE || path.join(ROOT, ".env");
 
 export const REGISTRY_FILE = process.env.AGENTS_REGISTRY || path.join(ROOT, "agents", "agents.json");
 export const CHANNELS_FILE = process.env.AGENTS_CHANNELS || path.join(ROOT, "config", "channels.yaml");
+export const GATEWAY_FILE = process.env.AGENTS_GATEWAY_CONFIG || path.join(ROOT, "config", "gateway.yaml");
+
+/** The gateway is optional. It is ON when config/gateway.yaml exists (create
+ * it with `npm run gateway:on`), unless AGENTS_GATEWAY=off. With it off,
+ * agents use Claude Code's own tools, limited by each run's allowlist. */
+export function gatewayEnabled() {
+  if (process.env.AGENTS_GATEWAY === "off") return false;
+  return existsSync(process.env.AGENTS_GATEWAY_CONFIG || GATEWAY_FILE);
+}
 
 /** Parse a shell-style KEY=VALUE file. Ignores comments and blanks, strips
  * quotes and a leading `export`. Returns null if the file can't be read. */
@@ -103,8 +112,9 @@ export function resolveAgent(slug) {
     slug,
     name: meta.name,
     role: meta.role || "",
-    // The gateway caller whose allowlist applies (config/gateway.yaml).
-    caller: meta.caller || `slack-${slug}`,
+    // Its identity in the gateway's allowlist (config/gateway.yaml), if the
+    // gateway is on. Same on every surface.
+    caller: meta.caller || `agent-${slug}`,
     description: meta.description || "",
     personaPath: path.join(ROOT, "agents", meta.persona || `personas/${slug}.md`),
     // Optional {name: {path, repo, autoMerge, writePaths}}: repos this agent
@@ -112,8 +122,15 @@ export function resolveAgent(slug) {
     workRepos: meta.workRepos || null,
     // Model ALIAS ("haiku", "sonnet", "opus"), never a dated model ID.
     model: meta.model || "sonnet",
+    // Extra Claude Code tools this agent may use, as permission specifiers
+    // (e.g. "WebSearch", "Bash(npm test:*)", "mcp__github__get_issue" from your
+    // own MCP config). Works with or without the gateway.
+    tools: Array.isArray(meta.tools) ? meta.tools.map(String) : [],
+    // Edit files in its working folder when run interactively as a Claude
+    // Code subagent (the person still approves each edit).
+    canEdit: Boolean(meta.canEdit),
     // Channel aliases (config/channels.yaml) this agent may post reports to
-    // with the gateway's post_report tool, from any surface.
+    // with the gateway's post_report tool. Needs the gateway.
     reportsTo: Array.isArray(meta.reportsTo) ? meta.reportsTo : [],
   };
 }

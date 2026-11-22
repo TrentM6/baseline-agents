@@ -4,21 +4,25 @@
  * what it can see, and make one kb_search call. Proves the gateway starts and
  * the allowlist for that caller is what you expect.
  *
- *   npm run smoke-test                # as slack-scout
+ *   npm run smoke-test                # as agent-scout
  *   npm run smoke-test -- session     # as the interactive session
  */
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const caller = process.argv[2] || "slack-scout";
+const caller = process.argv[2] || "agent-scout";
+const own = path.join(ROOT, "config", "gateway.yaml");
+const configEnv = existsSync(own) ? {} : { AGENTS_GATEWAY_CONFIG: path.join(ROOT, "config", "gateway.example.yaml") };
+if (!existsSync(own)) console.log("(gateway is off; testing with config/gateway.example.yaml)");
 
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: [path.join(ROOT, "gateway/src/index.mjs")],
-  env: { ...process.env, AGENTS_CALLER: caller, AGENTS_ROOT: ROOT },
+  env: { ...process.env, ...configEnv, AGENTS_CALLER: caller, AGENTS_ROOT: ROOT },
   stderr: "inherit",
 });
 const client = new Client({ name: "smoke-test", version: "0.1.0" });

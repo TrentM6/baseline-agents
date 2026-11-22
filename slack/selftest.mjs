@@ -33,6 +33,7 @@ const dryLog = path.join(tmp, "dryrun.jsonl");
 process.env.AGENTS_ENV_FILE = path.join(tmp, ".env");
 process.env.AGENTS_REGISTRY = path.join(tmp, "agents.json");
 process.env.SLACK_AGENT_DRY_RUN = "1";
+process.env.AGENTS_GATEWAY = "off";
 process.env.SLACK_DRYRUN_LOG = dryLog;
 process.env.SLACK_RECEIVER_PORT = String(PORT);
 for (const k of Object.keys(process.env)) if (/^SLACK_.*_(SIGNING_SECRET|BOT_TOKEN)$/.test(k)) delete process.env[k];

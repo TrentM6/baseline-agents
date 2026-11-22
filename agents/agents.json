@@ -5,7 +5,6 @@
     "role": "Knowledge lead",
     "description": "Answers questions from your knowledge base and says plainly when something isn't recorded.",
     "persona": "personas/scout.md",
-    "caller": "slack-scout",
     "model": "sonnet",
     "slackUserId": null,
     "reportsTo": [

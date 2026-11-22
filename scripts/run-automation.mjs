@@ -14,6 +14,8 @@ import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
+import { mcpArgs } from "../core/run.mjs";
+import { gatewayEnabled } from "../core/config.mjs";
 
 const ROOT = process.env.AGENTS_ROOT ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CLAUDE_BIN = process.env.CLAUDE_BIN ?? "claude";
@@ -82,7 +84,7 @@ const HEADLESS_DISCIPLINE =
 const childEnv = { ...process.env, AGENTS_CALLER: name, AGENTS_ROOT: ROOT };
 delete childEnv.SLACK_BOT_TOKEN;
 const reportTo = automation.report?.to ? [].concat(automation.report.to) : [];
-const reportHint = reportTo.length
+const reportHint = reportTo.length && gatewayEnabled()
   ? `\n\nTo share your result, use the gateway tool mcp__gateway__post_report with "to": ${reportTo.map((t) => `"${t}"`).join(" or ")}. If it says the channel isn't connected, skip the post and say so in your final message.`
   : "";
 
@@ -91,9 +93,9 @@ const args = [
   "--output-format", "json",
   "--max-turns", String(automation.max_turns ?? 40),
   "--append-system-prompt", HEADLESS_DISCIPLINE + skillsHint(automation.skills) + reportHint,
-  // The gateway only: your account-level MCP servers must not leak in.
-  "--mcp-config", path.join(ROOT, ".mcp.json"),
-  "--strict-mcp-config",
+  // With the gateway on, it is the only MCP server, so account-level servers
+  // can't leak into an unattended run.
+  ...mcpArgs(),
 ];
 const allowedTools = (automation.allowed_tools ?? []).join(",");
 if (allowedTools) args.push("--allowedTools", allowedTools);

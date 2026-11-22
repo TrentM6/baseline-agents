@@ -6,8 +6,8 @@
  * files) behind per-caller allowlists, structural hard-denies, and a call log
  * (logs/toolcalls.jsonl).
  *
- * Caller identity = AGENTS_CALLER (the Slack runner sets slack-<slug>, the
- * automation runner sets the automation's name). Unset = "session", the
+ * Caller identity = AGENTS_CALLER (an agent's turn sets agent-<slug>, an
+ * automation sets its own name). Unset = "session", the
  * interactive human at a terminal.
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";

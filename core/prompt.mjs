@@ -7,18 +7,19 @@
 // etiquette on top through `surfaceRules`; the agent itself stays identical.
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { ROOT, loadPersona, roster, loadChannels } from "./config.mjs";
+import { ROOT, loadPersona, roster, loadChannels, gatewayEnabled } from "./config.mjs";
 import { kbMap } from "./kb.mjs";
 
 const GH_BIN = process.env.GH_BIN || "gh";
 const OPERATOR = process.env.OPERATOR_NAME || "the operator";
 
 // --- tools: a lean base, widened per repo for agents that do repo work --------
-// Every agent gets read-only file tools, skills, and the gateway (which applies
-// the agent's own allowlist from config/gateway.yaml). Reads are scoped to the
+// Every agent gets read-only file tools and skills. Reads are scoped to the
 // working directory with `./**`: a bare "Read" grant reaches the whole
-// filesystem, and headless nobody would notice.
-export const BASE_TOOLS = ["Read(./**)", "Grep(./**)", "Glob(./**)", "Skill", "mcp__gateway"];
+// filesystem, and headless nobody would notice. On top of that: the agent's
+// own `tools` from agents.json, and the gateway if it's on (the gateway then
+// applies the agent's allowlist from config/gateway.yaml).
+export const BASE_TOOLS = ["Read(./**)", "Grep(./**)", "Glob(./**)", "Skill"];
 const WORK_GIT_SUBCOMMANDS = ["status", "add", "commit", "checkout", "switch", "branch", "diff", "log", "push", "fetch", "pull", "rm"];
 
 // Normalize workRepos to [name, path, writePaths|null, autoMerge, repo] rows.
@@ -50,6 +51,9 @@ export function workRepoEntries(agent) {
  */
 export function buildAllowedTools(agent, opts = {}) {
   const tools = [...BASE_TOOLS];
+  const gateway = opts.gateway ?? gatewayEnabled();
+  if (gateway) tools.push("mcp__gateway");
+  for (const t of agent.tools || []) if (!tools.includes(t)) tools.push(t);
   if (opts.home) tools.push(`Read(/${opts.home}/**)`); // `//abs/path` = absolute
   if (opts.allowEdits) tools.push("Edit(./**)");
   // Repo grants are relative to the agents repo, so they only apply when the
@@ -58,6 +62,7 @@ export function buildAllowedTools(agent, opts = {}) {
     for (const [, relPath, writePaths, autoMerge, repo] of workRepoEntries(agent)) {
       for (const wp of writePaths || [null]) tools.push(`Edit(./${relPath}${wp ? `/${wp}` : ""}/**)`);
       for (const sub of WORK_GIT_SUBCOMMANDS) tools.push(`Bash(git -C ${relPath} ${sub}:*)`);
+      if (repo) for (const bin of new Set(["gh", GH_BIN])) tools.push(`Bash(${bin} pr create --repo ${repo}:*)`);
       // Both bare `gh` and GH_BIN: models type bare `gh` whatever you tell them.
       if (autoMerge) {
         for (const bin of new Set(["gh", GH_BIN])) {
@@ -86,14 +91,14 @@ function workRules(entries) {
     "3. Work on a NEW branch: `git -C <repo> checkout -b work/<your-slug>-<short-desc>`. Never commit to or push main.\n" +
     "4. Make focused commits with clear messages.\n" +
     "5. Push: `git -C <repo> push -u origin work/<your-slug>-<short-desc>`.\n" +
-    "6. Open the PR with the gateway tool `mcp__gateway__github_create_pull_request`. For a repo marked [you may merge your own PRs here]: run `gh pr merge --repo <owner/name> <PR#> --auto --squash` (keep `--repo` right after `merge`; the grant is a literal prefix match), then poll `gh pr view --repo <owner/name> <PR#> --json state,mergedAt` until it reports MERGED. Report the work done only once it has merged, with the link. For other repos, opening the PR and posting the link is the correct stopping point.\n" +
+    "6. Open the PR: `gh pr create --repo <owner/name> --head work/<your-slug>-<short-desc> --title \"...\" --body \"...\"` (keep `--repo` right after `create`; the grant is a literal prefix match). For a repo marked [you may merge your own PRs here]: run `gh pr merge --repo <owner/name> <PR#> --auto --squash` (keep `--repo` right after `merge`; the grant is a literal prefix match), then poll `gh pr view --repo <owner/name> <PR#> --json state,mergedAt` until it reports MERGED. Report the work done only once it has merged, with the link. For other repos, opening the PR and posting the link is the correct stopping point.\n" +
     "=== END REPO WORK MODE ==="
   );
 }
 
 // --- reporting: post a result to a channel, from any surface ------------------
 function reportRules(agent) {
-  if (!agent.reportsTo.length) return "";
+  if (!agent.reportsTo.length || !gatewayEnabled()) return "";
   const channels = loadChannels();
   const lines = agent.reportsTo.map((alias) => {
     const c = channels[alias];
@@ -128,7 +133,7 @@ export function loadMemory(agent) {
 
 // --- shared rules ---------------------------------------------------------------
 export const GROUNDING_RULES =
-  "Ground every factual claim in what you actually read this turn from the knowledge base, the repo, or a gateway tool. NEVER invent a person, client, project, date, filename, number, PR, or commit hash. If it isn't there, say you have no record of it. " +
+  "Ground every factual claim in what you actually read this turn from the knowledge base, the files, or a tool. NEVER invent a person, client, project, date, filename, number, PR, or commit hash. If it isn't there, say you have no record of it. " +
   "Before saying you have no record of something, check the KB MAP and READ any page that might cover it.";
 
 const OPS_RULES =
@@ -194,7 +199,7 @@ export function buildSystem(agent, opts = {}) {
   const reports = reportRules(agent);
   const map = opts.kbMap === false ? "" : kbMap();
   const home = opts.home
-    ? `=== WHERE YOU ARE ===\nYou are working in another project folder (your working directory). Your own home (knowledge base, memory, skills) is the agents repo at ${opts.home}. KB paths below are relative to it: read them as ${opts.home}/kb/... Load skills with the gateway tool \`mcp__gateway__read_skill\`, since the Skill tool only sees this folder's skills.\n=== END WHERE YOU ARE ===`
+    ? `=== WHERE YOU ARE ===\nYou are working in another project folder (your working directory). Your own home (knowledge base, memory, skills) is the agents repo at ${opts.home}. KB paths below are relative to it: read them as ${opts.home}/kb/... Its skills are in ${opts.home}/.claude/skills/<name>/SKILL.md: read the one you need with Read, since the Skill tool only sees this folder's skills.\n=== END WHERE YOU ARE ===`
     : "";
   return [
     persona,
@@ -202,7 +207,7 @@ export function buildSystem(agent, opts = {}) {
     home,
     teammates,
     reports,
-    OPS_RULES,
+    gatewayEnabled() ? OPS_RULES : "",
     autonomyRules(),
     mem.loaded ? mem.section : "",
     entries.length ? workRules(entries) : "",

@@ -2,6 +2,7 @@ import { callUpstream } from "./upstreams.mjs";
 import { logToolCall } from "./log.mjs";
 import { runSecondOpinion } from "./second-opinion.mjs";
 import { isLocalTool, runLocalTool } from "./local-tools.mjs";
+import { loadGatewayConfig } from "./config.mjs";
 
 /**
  * The one place a tool call actually runs: policy check, argument-scope check,
@@ -28,6 +29,7 @@ export async function executeTool({ caller, name, args, clients, policy }) {
   try {
     let result;
     if (name === "second_opinion") {
+      if (loadGatewayConfig().second_opinion !== true) throw new Error("second_opinion is off (set second_opinion: true in config/gateway.yaml)");
       result = { content: [{ type: "text", text: await runSecondOpinion(args ?? {}, caller) }] };
     } else if (isLocalTool(name)) {
       result = await runLocalTool(name, args ?? {}, caller);

@@ -20,7 +20,10 @@
     "schedule:uninstall": "node scripts/schedule.mjs uninstall",
     "receiver:install": "node scripts/schedule.mjs install-receiver",
     "smoke-test": "node gateway/smoke-test.mjs",
-    "agents:sync": "node scripts/agents-sync.mjs"
+    "agents:sync": "node scripts/agents-sync.mjs",
+    "gateway:on": "node scripts/gateway.mjs on",
+    "gateway:off": "node scripts/gateway.mjs off",
+    "gateway:status": "node scripts/gateway.mjs status"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

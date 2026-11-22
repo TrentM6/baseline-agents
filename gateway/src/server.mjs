@@ -12,7 +12,7 @@ import { Policy } from "./policy.mjs";
 import { secondOpinionTool } from "./second-opinion.mjs";
 import { executeTool } from "./execute-tool.mjs";
 import { LOCAL_TOOLS } from "./local-tools.mjs";
-import { ROOT } from "./config.mjs";
+import { ROOT, loadGatewayConfig } from "./config.mjs";
 
 const TOOLS_CACHE = path.join(ROOT, "logs", "gateway-tools-cache.json");
 
@@ -42,7 +42,10 @@ function writeToolsCache(caller, tools) {
 export function startUpstreams(caller) {
   const state = { resolved: false };
   state.ready = connectUpstreams().then(({ clients, tools }) => {
-    const allTools = [...tools, ...(process.env.OPENROUTER_API_KEY ? [secondOpinionTool] : []), ...LOCAL_TOOLS];
+    // second_opinion is opt-in: `second_opinion: true` in gateway.yaml AND an
+    // OPENROUTER_API_KEY. Otherwise it isn't listed for anyone.
+    const secondOpinionOn = loadGatewayConfig().second_opinion === true && Boolean(process.env.OPENROUTER_API_KEY);
+    const allTools = [...tools, ...(secondOpinionOn ? [secondOpinionTool] : []), ...LOCAL_TOOLS];
     const visible = new Policy().filterTools(caller, allTools);
     console.error(`[gateway] caller=${caller} tools=${visible.length}/${allTools.length}`);
     writeToolsCache(caller, visible);

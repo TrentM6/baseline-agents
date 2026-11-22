@@ -6,7 +6,7 @@
 //
 // Pass `cwd` to have the agent work inside another project folder, and
 // `allowEdits: true` to let it change files there.
-export { ROOT, loadAgents, resolveAgent, roster, loadChannels, loadSharedEnv, warnIfNoApiKey } from "./config.mjs";
+export { ROOT, loadAgents, resolveAgent, roster, loadChannels, loadSharedEnv, warnIfNoApiKey, gatewayEnabled } from "./config.mjs";
 export { buildSystem, buildAllowedTools, loadMemory, chooseModelAlias, BASE_TOOLS, GROUNDING_RULES } from "./prompt.mjs";
-export { runClaude, runAgent, LOCAL_RULES, gatewayMcpConfig } from "./run.mjs";
+export { runClaude, runAgent, LOCAL_RULES, gatewayMcpConfig, mcpArgs } from "./run.mjs";
 export { kbMap } from "./kb.mjs";

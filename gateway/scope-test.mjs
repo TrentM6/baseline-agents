@@ -11,7 +11,9 @@
  *   npm run scope-test
  */
 import { Policy } from "./src/policy.mjs";
-import { loadGatewayConfig } from "./src/config.mjs";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { ROOT, loadGatewayConfig } from "./src/config.mjs";
 
 let failures = 0;
 const check = (name, cond, detail = "") => {
@@ -48,7 +50,10 @@ check("github: create repo under owner allowed", fixture.scopeViolation("github_
 check("github: create repo under another org denied", fixture.scopeViolation("github_create_repository", { name: "new", owner: "other-org" }) !== null);
 check("trigger_automation: unknown automation denied", fixture.scopeViolation("trigger_automation", { name: "no-such-automation" }) !== null);
 
-console.log("\nYour config/gateway.yaml:");
+// Your config if the gateway is on, otherwise the example you'd start from.
+const own = path.join(ROOT, "config", "gateway.yaml");
+if (!process.env.AGENTS_GATEWAY_CONFIG && !existsSync(own)) process.env.AGENTS_GATEWAY_CONFIG = path.join(ROOT, "config", "gateway.example.yaml");
+console.log(`\n${path.relative(ROOT, process.env.AGENTS_GATEWAY_CONFIG || own)}:`);
 const doc = loadGatewayConfig();
 const live = new Policy(doc);
 check("config loads with a callers map", doc.callers && typeof doc.callers === "object");

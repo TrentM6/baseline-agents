@@ -10,18 +10,19 @@
  *                                    EVERY project you open in Claude Code
  *   npm run agents:sync -- --check → exit 1 if any generated file is stale
  *
- * Each subagent carries the agent's persona, memory, teammates, report
- * channels and knowledge-base map, and ONLY the gateway tools its caller is
- * allowed in config/gateway.yaml (resolved by booting the gateway as that
- * caller). Re-run after changing an agent, its memory, the KB, or the gateway
- * config; preflight warns when the files are stale.
+ * Each subagent carries the agent's persona, memory, teammates and
+ * knowledge-base map, plus its tools: Claude Code's own file tools, the
+ * agent's `tools` from agents.json, and, if the gateway is on, ONLY the
+ * gateway tools its caller is allowed (resolved by booting the gateway as that
+ * caller). Re-run after changing an agent, its memory, the KB, or the gateway;
+ * preflight warns when the files are stale.
  */
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { ROOT, loadAgents, resolveAgent } from "../core/config.mjs";
+import { ROOT, loadAgents, resolveAgent, gatewayEnabled } from "../core/config.mjs";
 import { buildSystem } from "../core/prompt.mjs";
 
 const userMode = process.argv.includes("--user");
@@ -51,11 +52,14 @@ async function gatewayToolsFor(caller) {
   }
 }
 
-function render(agent, gatewayTools, meta) {
+function render(agent, gatewayTools) {
   const tools = ["Read", "Grep", "Glob", "Skill"];
   // Interactive sessions still ask the person before an edit, unless their
   // permission mode says otherwise.
-  if (meta.canEdit || agent.workRepos) tools.push("Edit", "Write");
+  if (agent.canEdit || agent.workRepos) tools.push("Edit", "Write");
+  // A subagent's tools field takes tool NAMES, so "Bash(npm test:*)" becomes
+  // "Bash"; the person's own permission settings still gate each use.
+  for (const t of agent.tools) { const n = t.replace(/\(.*\)$/, ""); if (!tools.includes(n)) tools.push(n); }
   tools.push(...gatewayTools.map((n) => `mcp__gateway__${n}`));
   const description = `${agent.name}, ${agent.role || "agent"}. ${agent.description} Use when the request is in ${agent.name}'s domain, or when the person asks for ${agent.name} by name.`;
   const body = buildSystem(agent, { surfaceRules: SUBAGENT_RULES, home: userMode ? ROOT : null });
@@ -67,14 +71,13 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
 let stale = 0;
 for (const slug of agents) {
   const agent = resolveAgent(slug);
-  const meta = loadAgents()[slug];
   const file = path.join(OUT_DIR, `${slug}.md`);
   const existing = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
   if (existing && !existing.includes(MARKER)) {
     console.error(`  skip  ${file} exists and wasn't generated here; rename one of them`);
     continue;
   }
-  const content = render(agent, await gatewayToolsFor(agent.caller), meta);
+  const content = render(agent, gatewayEnabled() ? await gatewayToolsFor(agent.caller) : []);
   if (checkOnly) {
     if (existing !== content) { stale++; console.error(`  stale ${path.relative(process.cwd(), file)}`); }
     continue;
@@ -90,12 +93,13 @@ if (checkOnly) {
 }
 
 if (userMode) {
-  console.log(`
-Your agents are now available in every Claude Code project. They reach their
-tools through this repo's gateway, so register it once for all projects:
+  console.log("\nYour agents are now available in every Claude Code project you open.");
+  if (gatewayEnabled()) {
+    console.log(`They reach gateway tools through this repo's gateway, so register it once for all projects:
 
   claude mcp add --scope user gateway --env AGENTS_ROOT=${ROOT} -- node ${path.join(ROOT, "gateway", "src", "index.mjs")}
 `);
+  }
 } else {
   console.log("\nOpen Claude Code in this repo and ask for an agent by name, e.g. \"ask scout what plans we sell\".");
 }

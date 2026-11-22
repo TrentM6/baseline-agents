@@ -1,10 +1,12 @@
-# Gateway configuration: the ONE place that decides which tools each of your
-# agents and automations can reach. Deny-by-default: a caller not listed under
-# `callers` sees nothing.
+# Gateway configuration (optional). Turn the gateway on with
+#   npm run gateway:on
+# which copies this file to config/gateway.yaml. With it on, this file is the
+# ONE place that decides which tools each agent and automation can reach.
+# Deny-by-default: a caller not listed under `callers` sees nothing.
 #
 # Caller names:
 #   session            you, at a terminal running `claude` in this repo
-#   slack-<agent-slug> an agent answering in Slack (or via scripts/ask.mjs)
+#   agent-<agent-slug> an agent, on every surface (or its `caller` in agents.json)
 #   <automation-name>  a scheduled automation from automations/automations.yaml
 #
 # After editing, run:  npm run scope-test
@@ -67,6 +69,10 @@ github:
   repo_allowlist: []
   #  - your-github-username/your-website
 
+# Cross-model review: the second_opinion tool asks a non-Claude model through
+# OpenRouter. Off unless this is true AND OPENROUTER_API_KEY is set.
+second_opinion: false
+
 # ---------------------------------------------------------------------------
 # Per-caller allowlists (globs over tool names).
 # ---------------------------------------------------------------------------
@@ -75,7 +81,7 @@ callers:
     allow: ["*"]
 
   # The example agent: reads the knowledge base and skills, nothing else.
-  slack-scout:
+  agent-scout:
     allow:
       - kb_search
       - kb_read_page

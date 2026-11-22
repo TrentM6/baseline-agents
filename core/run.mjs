@@ -2,14 +2,16 @@
 // runs an agent in its own process (the CLI, Slack, an app such as a design
 // sandbox) calls runClaude() or runAgent(); none of them build their own.
 //
-// Each turn spawns `claude -p` with the agent's system prompt and allowlist,
-// the gateway attached as an MCP server, and AGENTS_CALLER set so the gateway
-// applies THIS agent's tool allowlist.
+// Each turn spawns `claude -p` with the agent's system prompt and allowlist.
+// Anything outside the allowlist is denied. If the gateway is on, it is the
+// ONLY MCP server attached, and AGENTS_CALLER tells it whose allowlist to
+// apply. If it's off, Claude Code's own MCP config applies, still limited to
+// the tools the agent is granted.
 import { spawn } from "node:child_process";
 import { mkdirSync, appendFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { ROOT, resolveAgent, loadSharedEnv } from "./config.mjs";
+import { ROOT, resolveAgent, loadSharedEnv, gatewayEnabled } from "./config.mjs";
 import { buildSystem, buildAllowedTools, chooseModelAlias } from "./prompt.mjs";
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
@@ -18,8 +20,11 @@ const INACTIVITY_MS = 10 * 60_000; // kill a run with no output for 10 min
 const MAX_TURNS = Number(process.env.AGENTS_MAX_TURNS || 20);
 const log = (m) => console.error(`[agents ${new Date().toISOString()}] ${m}`);
 
-/** The gateway as an inline MCP config with ABSOLUTE paths, so a turn whose
- * cwd is another project still reaches this repo's gateway. */
+/** MCP args for a headless turn: the gateway alone (inline config with
+ * ABSOLUTE paths, so a turn in another folder still reaches it), or nothing. */
+export const mcpArgs = () => (gatewayEnabled() ? ["--mcp-config", gatewayMcpConfig(), "--strict-mcp-config"] : []);
+
+/** The gateway as an inline MCP config with absolute paths. */
 export function gatewayMcpConfig() {
   return JSON.stringify({
     mcpServers: {
@@ -66,8 +71,7 @@ export function runClaude({ agent, prompt, system, resumeId = null, onPhase, sur
       "--verbose", // required for stream-json with --print
       "--max-turns", String(MAX_TURNS),
       "--allowedTools", buildAllowedTools(agent, { home: elsewhere ? ROOT : null, allowEdits }),
-      "--mcp-config", gatewayMcpConfig(),
-      "--strict-mcp-config",
+      ...mcpArgs(),
       "--append-system-prompt", system,
       "--model", modelAlias,
     ];
