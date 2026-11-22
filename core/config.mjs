@@ -51,7 +51,9 @@ export function parseEnvFile(file) {
  * inherit credentials. Values already in process.env win. */
 export function loadSharedEnv() {
   const shared = parseEnvFile(ENV_FILE) || {};
-  for (const [k, v] of Object.entries(shared)) if (process.env[k] === undefined) process.env[k] = v;
+  // Empty values are skipped: an empty ANTHROPIC_API_KEY copied from
+  // .env.example must not shadow a real credential.
+  for (const [k, v] of Object.entries(shared)) if (v !== "" && process.env[k] === undefined) process.env[k] = v;
 }
 
 /** Live value of one env key: process.env first, then a fresh read of .env,

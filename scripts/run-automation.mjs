@@ -83,6 +83,7 @@ const HEADLESS_DISCIPLINE =
 // ---- report target (optional): the gateway's post_report enforces it ----
 const childEnv = { ...process.env, AGENTS_CALLER: name, AGENTS_ROOT: ROOT };
 delete childEnv.SLACK_BOT_TOKEN;
+if (childEnv.ANTHROPIC_API_KEY === "") delete childEnv.ANTHROPIC_API_KEY; // copied empty from .env.example
 const reportTo = automation.report?.to ? [].concat(automation.report.to) : [];
 const reportHint = reportTo.length && gatewayEnabled()
   ? `\n\nTo share your result, use the gateway tool mcp__gateway__post_report with "to": ${reportTo.map((t) => `"${t}"`).join(" or ")}. If it says the channel isn't connected, skip the post and say so in your final message.`
@@ -106,7 +107,7 @@ if (automation.model) args.push("--model", automation.model);
 const localBin = path.join(os.homedir(), ".local/bin");
 childEnv.PATH = childEnv.PATH ? `${localBin}${path.delimiter}${childEnv.PATH}` : localBin;
 
-if (!process.env.ANTHROPIC_API_KEY) {
+if (!process.env.ANTHROPIC_API_KEY) { // empty counts as missing
   console.error("[run-automation] WARNING: ANTHROPIC_API_KEY is not set, so Claude Code will use whatever login is on this machine. See README → Claude credentials.");
 }
 const startedAt = new Date();

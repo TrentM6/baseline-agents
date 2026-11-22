@@ -81,6 +81,8 @@ export function runClaude({ agent, prompt, system, resumeId = null, onPhase, sur
 
     // Headless: anything outside the allowlist is denied, never left waiting.
     const env = { ...process.env, AGENTS_ROOT: ROOT, AGENTS_CALLER: agent.caller, ...extraEnv };
+    // An empty key (copied from .env.example) would shadow a real login.
+    if (env.ANTHROPIC_API_KEY === "") delete env.ANTHROPIC_API_KEY;
     // No surface token leaks into a turn unless the surface passes it on purpose.
     if (!("SLACK_BOT_TOKEN" in extraEnv)) delete env.SLACK_BOT_TOKEN;
     // Service managers start with a minimal PATH; ~/.local/bin is where the

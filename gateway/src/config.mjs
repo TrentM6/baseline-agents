@@ -65,6 +65,6 @@ export function loadDotEnv() {
     const k = s.slice(0, eq).trim().replace(/^export\s+/, "");
     let v = s.slice(eq + 1).trim();
     if ((v.startsWith("'") && v.endsWith("'")) || (v.startsWith('"') && v.endsWith('"'))) v = v.slice(1, -1);
-    if (process.env[k] === undefined) process.env[k] = v;
+    if (v !== "" && process.env[k] === undefined) process.env[k] = v;
   }
 }
