@@ -1,4 +1,4 @@
-// selftest.mjs — offline check of the Slack receiver + runner, with NO Slack
+// selftest.mjs: offline check of the Slack adapter (receiver + turn handler), with NO Slack
 // and NO Claude. Boots the receiver on a test port against a temp .env and a
 // fixture registry, with SLACK_AGENT_DRY_RUN=1 so the runner records what it
 // would have spawned instead of spawning it. Exits nonzero on any failure.
@@ -40,7 +40,7 @@ delete process.env.SLACK_AGENTS_DISABLED;
 
 let failures = 0;
 const ok = (name) => console.log(`  ok   ${name}`);
-const bad = (name, detail) => { failures++; console.error(`  FAIL ${name}${detail ? ` — ${detail}` : ""}`); };
+const bad = (name, detail) => { failures++; console.error(`  FAIL ${name}${detail ? `: ${detail}` : ""}`); };
 
 const sign = (ts, body) => "v0=" + crypto.createHmac("sha256", SECRET).update(`v0:${ts}:${body}`).digest("hex");
 async function post(slug, body, { sig, ts, retry } = {}) {
@@ -165,7 +165,7 @@ async function main() {
   }
 
   {
-    const { buildAllowedTools, BASE_TOOLS } = await import("./runner.mjs");
+    const { buildAllowedTools, BASE_TOOLS } = await import("../core/prompt.mjs");
     const at = buildAllowedTools({ slug: "lean", workRepos: null });
     if (at === BASE_TOOLS.join(",") && !at.includes("Edit(")) ok("agent without workRepos stays read-only");
     else bad("agent without workRepos stays read-only", at);
@@ -176,14 +176,14 @@ async function main() {
     await post("scout", mention("Ev-mem-scout"));
     await post("builder", mention("Ev-mem-builder"));
     await waitForDry(before + 2);
-    const { loadMemory } = await import("./runner.mjs");
+    const { loadMemory } = await import("../core/prompt.mjs");
     const good = lastDryFor("scout")?.memoryLoaded === true && lastDryFor("builder")?.memoryLoaded === false && loadMemory({}).loaded === false;
     if (good) ok("memory: seeded agent loads MEMORY.md, unseeded agent runs without (no crash)");
     else bad("memory wiring", `scout=${lastDryFor("scout")?.memoryLoaded} builder=${lastDryFor("builder")?.memoryLoaded}`);
   }
 
   {
-    const { stripSentinel } = await import("./runner.mjs");
+    const { stripSentinel } = await import("./turn.mjs");
     const good = stripSentinel("NO_REPLY") === "" && stripSentinel("**NO_REPLY**") === "" && stripSentinel("Thinking…\n\nNO_REPLY") === "Thinking…" && stripSentinel("A real answer") === "A real answer";
     if (good) ok("NO_REPLY sentinel never posts as visible text");
     else bad("NO_REPLY sentinel stripping");
@@ -194,7 +194,7 @@ async function main() {
     const plain = toSlackMessage("Just **bold** and [a link](https://example.com)");
     const report = toSlackMessage("# Title\n\n## Section\n- one\n\n| A | B |\n|---|---|\n| x | y |");
     const good = !plain.blocks && plain.text.includes("*bold*") && plain.text.includes("<https://example.com|a link>") &&
-      report.blocks?.[0]?.type === "header" && report.text.includes("• *x* — B: y");
+      report.blocks?.[0]?.type === "header" && report.text.includes("• *x* · B: y");
     if (good) ok("markdown → Slack mrkdwn / Block Kit conversion");
     else bad("markdown conversion", JSON.stringify({ plain, report }).slice(0, 300));
   }

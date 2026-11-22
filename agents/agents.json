@@ -1,5 +1,5 @@
 {
-  "_readme": "Your agent roster. One key per agent (the slug). Keys starting with _ are ignored. See README.md → 'Add an agent'. Slack credentials live in .env as SLACK_<SLUG>_SIGNING_SECRET and SLACK_<SLUG>_BOT_TOKEN.",
+  "_readme": "Your agent roster. One key per agent (the slug). Keys starting with _ are ignored. See README, Add an agent.",
   "scout": {
     "name": "Scout",
     "role": "Knowledge lead",
@@ -7,6 +7,9 @@
     "persona": "personas/scout.md",
     "caller": "slack-scout",
     "model": "sonnet",
-    "slackUserId": null
+    "slackUserId": null,
+    "reportsTo": [
+      "general"
+    ]
   }
 }

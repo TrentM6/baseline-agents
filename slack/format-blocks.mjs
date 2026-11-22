@@ -1,4 +1,4 @@
-// format-blocks.mjs — turn standard markdown (headings, **bold**, [label](url),
+// format-blocks.mjs: turn standard markdown (headings, **bold**, [label](url),
 // - bullets, tables) into Slack Block Kit + mrkdwn, so a report posts as a
 // report (header, dividers, bold sections) instead of a wall of literal
 // markdown. Slack does not render markdown: mrkdwn wants *bold* (single
@@ -49,8 +49,8 @@ function tableToBullets(header, rows) {
         .slice(1)
         .map((h, i) => (cells[i + 1] ? `${h}: ${cells[i + 1]}` : null))
         .filter(Boolean)
-        .join(" — ");
-      return rest ? `• *${label}* — ${rest}` : `• *${label}*`;
+        .join(" · ");
+      return rest ? `• *${label}* · ${rest}` : `• *${label}*`;
     })
     .join("\n");
 }

@@ -1,18 +1,20 @@
 #!/bin/bash
-# slack-send.sh <channel-id> [thread_ts] — post a message (read from stdin) to
-# Slack as whichever agent's SLACK_BOT_TOKEN is in the environment.
+# send.sh <channel-id> [thread_ts]: post a message (read from stdin) to Slack
+# as whichever agent's SLACK_BOT_TOKEN is in the environment. A shell-level
+# helper for your own scripts; agents and automations use the gateway's
+# post_report tool instead, which never hands them a token.
 #
-#   bash scripts/slack-send.sh C0123456789 < files/kb-digest.md
+#   SLACK_BOT_TOKEN=xoxb-... bash slack/send.sh C0123456789 < files/kb-digest.md
 #
 # Markdown is converted to Block Kit (slack/format-blocks.mjs), so reports
 # render with headings and bold instead of literal syntax. Every confirmed post
 # appends a receipt to logs/slack-posts.jsonl: a run's "ok" only proves the
 # process ran; the receipt proves the message landed.
 set -euo pipefail
-channel="${1:?usage: slack-send.sh <channel-id> [thread_ts]  (message on stdin)}"
+channel="${1:?usage: send.sh <channel-id> [thread_ts]  (message on stdin)}"
 thread_ts="${2:-}"
 # No apostrophes inside ${...:?...}: a single quote there opens a quoting context.
-: "${SLACK_BOT_TOKEN:?slack-send: SLACK_BOT_TOKEN not set (the runner sets it for agents and automations allowed to post)}"
+: "${SLACK_BOT_TOKEN:?send.sh: SLACK_BOT_TOKEN not set (export an agent bot token first)}"
 
 ROOT="${AGENTS_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 msg="$(cat)"
@@ -31,7 +33,7 @@ resp="$(curl -sS -X POST https://slack.com/api/chat.postMessage \
   --data "$payload")"
 
 if ! printf '%s' "$resp" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.exit(JSON.parse(s).ok?0:1)}catch{process.exit(1)}})'; then
-  echo "slack-send: post failed: $resp" >&2
+  echo "send.sh: post failed: $resp" >&2
   exit 1
 fi
 

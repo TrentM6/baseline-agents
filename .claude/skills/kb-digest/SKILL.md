@@ -1,6 +1,6 @@
 ---
 name: kb-digest
-description: Write the weekly knowledge-base digest — what was filed or updated in kb/ in the last 7 days — to files/kb-digest.md, and post it to Slack when a channel is configured. Use when asked for the KB digest, "what changed in the knowledge base this week", or when the kb-digest automation runs.
+description: Write the weekly knowledge-base digest (what was filed or updated in kb/ in the last 7 days) to files/kb-digest.md, and post it to the team's digest channel when one is connected. Use when asked for the KB digest, "what changed in the knowledge base this week", or when the kb-digest automation runs.
 ---
 
 # KB digest
@@ -14,19 +14,19 @@ Produces `files/kb-digest.md`: a short, scannable list of what changed in the kn
 3. Write `files/kb-digest.md` with exactly this shape:
 
    ```markdown
-   # Knowledge base — week of YYYY-MM-DD
+   # Knowledge base, week of YYYY-MM-DD
 
    **N pages filed or updated.**
 
    ## New and updated
-   - **Title** — description (`kb/category/slug.md`)
+   - **Title**: description (`kb/category/slug.md`)
 
    ## Missing pages
-   - `kb/category/slug.md` — in the log but not on disk
+   - `kb/category/slug.md`: in the log but not on disk
    ```
 
    Drop the "Missing pages" section when it's empty. With nothing in the last 7 days, write the heading plus one line: `No pages filed or updated this week.`
-4. Post to Slack only if your instructions give you a channel id: run `bash scripts/slack-send.sh <channel-id> < files/kb-digest.md` in the foreground and check it exits 0. With no channel id, skip this step and say so in your final message.
+4. Post the digest with the gateway tool `mcp__gateway__post_report`: `to` = the channel your instructions name (default `digest`), `text` = the file's content. If it says the channel isn't connected, that's fine: the file is the deliverable. Say which happened in your final message.
 5. Final message: one line with the page count, the output path, and whether it was posted.
 
 ## Gotchas

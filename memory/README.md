@@ -1,4 +1,4 @@
-# memory/ — per-agent working memory
+# memory/: per-agent working memory
 
 One folder per agent slug in `agents/agents.json`. The runner injects `memory/<slug>/MEMORY.md` into that agent's system prompt on every turn.
 

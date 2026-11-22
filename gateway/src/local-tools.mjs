@@ -13,7 +13,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { ROOT, agentTriggerable } from "./config.mjs";
+import { ROOT, agentTriggerable, automationReport } from "./config.mjs";
+import { loadAgents, loadChannels } from "../../core/config.mjs";
 
 const pExecFile = promisify(execFile);
 const READ_CAP = 200_000;
@@ -27,11 +28,11 @@ const SEARCH_MAX_HITS = 40;
  *   agents/          the registry grants repo write access and channels
  *   config/          gateway.yaml IS the allowlist
  *   automations/     prompts and tool grants for scheduled runs
- *   gateway/, slack/, scripts/, infra/   code the machine runs
+ *   core/, gateway/, slack/, scripts/, infra/   code the machine runs
  * Reads are unaffected. Checked on the RESOLVED path, so `kb/../gateway/x`
  * can't slip through.
  */
-const WRITE_DENY_PREFIXES = [".git", ".claude", "agents", "config", "automations", "gateway", "slack", "scripts", "infra", "node_modules", "logs"];
+const WRITE_DENY_PREFIXES = [".git", ".claude", "agents", "config", "automations", "core", "gateway", "slack", "scripts", "infra", "node_modules", "logs"];
 
 /** Carve-outs inside a denied prefix. A skill is markdown read by a model,
  * never executed; .claude/settings.json stays denied. */
@@ -64,7 +65,7 @@ function assertWritable(abs) {
   if (WRITE_ALLOW_PREFIXES.some((p) => rel.startsWith(p))) return abs;
   const top = rel.split("/")[0];
   if (WRITE_DENY_PREFIXES.includes(top)) {
-    throw new Error(`writes to ${top}/ are denied structurally — that path controls execution or permissions. A human makes this change.`);
+    throw new Error(`writes to ${top}/ are denied structurally: that path controls execution or permissions. A human makes this change.`);
   }
   return abs;
 }
@@ -72,7 +73,7 @@ function assertWritable(abs) {
 export const LOCAL_TOOLS = [
   {
     name: "kb_search",
-    description: "Search the knowledge base (kb/) for pages matching a query. Returns page slugs with a matching line — use kb_read_page to read one in full.",
+    description: "Search the knowledge base (kb/) for pages matching a query. Returns page slugs with a matching line: use kb_read_page to read one in full.",
     inputSchema: { type: "object", properties: { query: { type: "string", description: "Search terms (case-insensitive)" } }, required: ["query"] },
   },
   {
@@ -104,6 +105,19 @@ export const LOCAL_TOOLS = [
     name: "trigger_automation",
     description: "Run an agent_triggerable automation NOW and return its result. Blocks until the run finishes (up to ~200s) and reports its status; a longer run keeps going in the background and its outcome lands in logs/runs.jsonl.",
     inputSchema: { type: "object", properties: { name: { type: "string", description: "Automation name from list_automations" } }, required: ["name"] },
+  },
+  {
+    name: "post_report",
+    description: "Post a finished result (markdown) to a named report channel, as an agent. Works from any surface: the CLI, a Claude Code subagent, an app, an automation. `to` must be one of the agent's reportsTo channels. Returns whether it was posted; if the channel isn't connected, hand the person the text instead.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        to: { type: "string", description: "Channel alias from config/channels.yaml" },
+        text: { type: "string", description: "The message, in markdown" },
+        as: { type: "string", description: "The agent slug posting. Required in interactive sessions; agents and automations post as themselves." },
+      },
+      required: ["to", "text"],
+    },
   },
   {
     name: "read_file",
@@ -145,8 +159,57 @@ async function walkMarkdown(dir, acc = []) {
   return acc;
 }
 
-export async function runLocalTool(name, args = {}) {
-  return { content: [{ type: "text", text: await dispatch(name, args ?? {}) }] };
+export async function runLocalTool(name, args = {}, caller = "session") {
+  return { content: [{ type: "text", text: await dispatch(name, args ?? {}, caller) }] };
+}
+
+/**
+ * Who is posting, and where may they post? The caller decides, not the
+ * arguments: an agent's turn (slack-<slug> or its own caller) posts only as
+ * itself; an automation posts as its report.as; only the interactive session
+ * (a human, or a subagent inside their Claude Code) may name `as`. In every
+ * case the destination must be on that agent's reportsTo (or the automation's
+ * report.to).
+ */
+function resolveReporter(caller, args) {
+  const agents = loadAgents();
+  const own = Object.entries(agents).find(([slug, a]) => (a.caller || `slack-${slug}`) === caller);
+  if (own) {
+    const [slug, a] = own;
+    if (args.as && args.as !== slug) return { error: `caller ${caller} may only post as ${slug}` };
+    return { as: slug, allowed: a.reportsTo ?? [] };
+  }
+  const auto = automationReport(caller);
+  if (auto) {
+    if (args.as && args.as !== auto.as) return { error: `automation ${caller} posts as ${auto.as}` };
+    return { as: auto.as, allowed: auto.to };
+  }
+  if (caller === "session") {
+    const as = String(args.as ?? "");
+    if (!agents[as]) return { error: `pass "as": one of ${Object.keys(agents).join(", ")}` };
+    return { as, allowed: agents[as].reportsTo ?? [] };
+  }
+  return { error: `caller ${caller} is not an agent or automation with a report target` };
+}
+
+async function postReport(args, caller) {
+  const to = String(args.to ?? "").trim();
+  const text = String(args.text ?? "").trim();
+  if (!to || !text) return "Error: `to` and `text` are required.";
+  const who = resolveReporter(caller, args);
+  if (who.error) return `Error: ${who.error}.`;
+  if (!who.allowed.includes(to)) return `Error: ${who.as} may not post to "${to}". Allowed: ${who.allowed.join(", ") || "none (set reportsTo in agents/agents.json)"}.`;
+  const channel = loadChannels()[to];
+  if (!channel) return `Error: no channel "${to}" in config/channels.yaml.`;
+  if (process.env.AGENTS_REPORT_DRY_RUN === "1") {
+    await fs.mkdir(path.join(ROOT, "logs"), { recursive: true });
+    await fs.appendFile(path.join(ROOT, "logs", "reports-dryrun.jsonl"), JSON.stringify({ ts: new Date().toISOString(), caller, as: who.as, to, slack: channel.slack || null, chars: text.length }) + "\n");
+    return `Dry run: would post ${text.length} chars to "${to}" as ${who.as}.`;
+  }
+  if (!channel.slack) return `Not posted: channel "${to}" isn't connected (its Slack channel id is empty in .env). Give the person the text instead.`;
+  const { postAsAgent } = await import("../../slack/post.mjs");
+  const r = await postAsAgent({ as: who.as, channelId: channel.slack, text, caller });
+  return r.ok ? `Posted to "${to}" as ${who.as} (Slack message ${r.ts}).` : `Not posted: ${r.error}. Give the person the text instead.`;
 }
 
 async function readRuns(auto) {
@@ -159,8 +222,11 @@ async function readRuns(auto) {
   }
 }
 
-async function dispatch(name, args) {
+async function dispatch(name, args, caller) {
   switch (name) {
+    case "post_report":
+      return postReport(args, caller);
+
     case "kb_search": {
       const query = String(args.query ?? "").trim();
       if (!query) return "Error: query is required.";
@@ -196,7 +262,7 @@ async function dispatch(name, args) {
         let body = "";
         try { body = await fs.readFile(f, "utf8"); } catch {}
         const desc = frontmatterField(body, "description") ?? frontmatterField(body, "title") ?? "";
-        return desc ? `${rel} — ${desc}` : rel;
+        return desc ? `${rel}: ${desc}` : rel;
       }));
       return `${rows.length} page(s):\n${rows.join("\n")}`;
     }
@@ -236,12 +302,12 @@ async function dispatch(name, args) {
       // Already running (its own lock is held) → report, don't stack a second run.
       try {
         await fs.access(path.join(ROOT, "logs", ".locks", auto));
-        return `${auto} is already running — wait for it to finish, then check logs/runs.jsonl.`;
+        return `${auto} is already running: wait for it to finish, then check logs/runs.jsonl.`;
       } catch {}
       const nowMs = Date.now();
       const lastMs = triggerCooldown.get(auto) ?? 0;
       if (nowMs - lastMs < AGENT_TRIGGER_COOLDOWN_MS) {
-        return `${auto} was triggered ${Math.round((nowMs - lastMs) / 1000)}s ago — wait at least ${AGENT_TRIGGER_COOLDOWN_MS / 1000}s between triggers.`;
+        return `${auto} was triggered ${Math.round((nowMs - lastMs) / 1000)}s ago: wait at least ${AGENT_TRIGGER_COOLDOWN_MS / 1000}s between triggers.`;
       }
       triggerCooldown.set(auto, nowMs);
       const before = (await readRuns(auto)).length;
@@ -264,7 +330,7 @@ async function dispatch(name, args) {
           return `Ran ${auto} (trigger=agent): status=${row.status}${turns}${secs}.${failNote}`;
         }
       }
-      return `Triggered ${auto} — still running after 200s. Its outcome will land in logs/runs.jsonl.`;
+      return `Triggered ${auto}: still running after 200s. Its outcome will land in logs/runs.jsonl.`;
     }
 
     case "read_file": {
@@ -288,7 +354,7 @@ async function dispatch(name, args) {
       const cur = await fs.readFile(abs, "utf8");
       const count = oldS ? cur.split(oldS).length - 1 : 0;
       if (count === 0) return `Error: old_string not found in ${rel}. Read the file and copy the exact text.`;
-      if (count > 1) return `Error: old_string appears ${count} times in ${rel} — add context so it matches once.`;
+      if (count > 1) return `Error: old_string appears ${count} times in ${rel}: add context so it matches once.`;
       await fs.writeFile(abs, cur.replace(oldS, () => newS));
       return `Edited ${rel}.`;
     }

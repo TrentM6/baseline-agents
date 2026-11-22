@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * smoke-test.mjs [caller] — boot the real gateway over stdio as a caller, list
+ * smoke-test.mjs [caller]: boot the real gateway over stdio as a caller, list
  * what it can see, and make one kb_search call. Proves the gateway starts and
  * the allowlist for that caller is what you expect.
  *

@@ -1,25 +1,23 @@
-// config.mjs — paths, env loading, and the agent registry.
+// config.mjs: paths, env loading, the agent registry, and report channels.
 //
-// Every other module asks this file where things live, so moving the repo or
-// pointing a test at a temp dir is one env var, never a code edit.
-//
-// Secrets are re-read from .env on every Slack request (not cached at boot):
-// you can add an agent's Slack credentials while the receiver is running and the
-// next event picks them up, and an agent with no credentials yet returns 503
-// while the others keep serving.
+// Every surface (the CLI, Claude Code subagents, Slack, automations, the
+// gateway) reads agents from here, so an agent is defined once and behaves the
+// same wherever it runs. Nothing in this file knows about Slack.
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse as parseYaml } from "yaml";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-/** Repo root. Override with AGENTS_ROOT (the selftest does). */
+/** The agents repo root (where agents, kb, memory, skills live). */
 export const ROOT = process.env.AGENTS_ROOT || path.resolve(HERE, "..");
 
 /** The env file holding every secret. Override with AGENTS_ENV_FILE. */
 export const ENV_FILE = process.env.AGENTS_ENV_FILE || path.join(ROOT, ".env");
 
 export const REGISTRY_FILE = process.env.AGENTS_REGISTRY || path.join(ROOT, "agents", "agents.json");
+export const CHANNELS_FILE = process.env.AGENTS_CHANNELS || path.join(ROOT, "config", "channels.yaml");
 
 /** Parse a shell-style KEY=VALUE file. Ignores comments and blanks, strips
  * quotes and a leading `export`. Returns null if the file can't be read. */
@@ -47,6 +45,13 @@ export function loadSharedEnv() {
   for (const [k, v] of Object.entries(shared)) if (process.env[k] === undefined) process.env[k] = v;
 }
 
+/** Live value of one env key: process.env first, then a fresh read of .env,
+ * so credentials added while a process runs are picked up without a restart. */
+export function envValue(key) {
+  if (process.env[key]) return process.env[key];
+  return (parseEnvFile(ENV_FILE) || {})[key] || "";
+}
+
 /** Warn (never fail) when no API key is configured: `claude` then falls back
  * to whatever login is on the machine, possibly a personal subscription, which
  * Anthropic's terms don't allow for agents other people talk to. */
@@ -54,31 +59,15 @@ export function warnIfNoApiKey(where) {
   if (process.env.ANTHROPIC_API_KEY) return;
   console.error(
     `[${where}] WARNING: ANTHROPIC_API_KEY is not set, so Claude Code will use whatever login is on this machine. ` +
-      "Agents that other people talk to need an API key — see README → Claude credentials."
+      "Agents that other people talk to need an API key. See README, Claude credentials."
   );
 }
 
-/** Live value of one env key: process.env first, then a fresh read of .env. */
-export function envValue(key) {
-  if (process.env[key]) return process.env[key];
-  return (parseEnvFile(ENV_FILE) || {})[key] || "";
-}
-
-/** `scout` → `SCOUT`, `my-agent` → `MY_AGENT`. Used to name per-agent secrets:
- * SLACK_<SLUG>_SIGNING_SECRET and SLACK_<SLUG>_BOT_TOKEN. */
+/** `scout` → `SCOUT`, `my-agent` → `MY_AGENT`. Names per-agent secrets. */
 export const envSlug = (slug) => String(slug).toUpperCase().replace(/[^A-Z0-9]+/g, "_");
 
-/** Slack credentials for one agent, read fresh. Null if either is missing. */
-export function slackSecrets(slug) {
-  const k = envSlug(slug);
-  const signing = envValue(`SLACK_${k}_SIGNING_SECRET`);
-  const bot = envValue(`SLACK_${k}_BOT_TOKEN`);
-  return signing && bot ? { SLACK_SIGNING_SECRET: signing, SLACK_BOT_TOKEN: bot } : null;
-}
-
-// The registry hot-reloads on mtime change. A permission or roster change
-// would otherwise sit inert until someone remembered to restart the receiver,
-// and a stale permission model is an incident. One stat per call is cheap.
+// The registry hot-reloads on mtime change, so a roster or permission change
+// takes effect on the next turn without a restart.
 let registry = null;
 let registryMtime = 0;
 export function loadAgents() {
@@ -93,26 +82,20 @@ export function loadAgents() {
 }
 
 /** The live roster: every agent's public identity. Personas never hardcode
- * who else is on the team; the runner builds each agent's "your teammates"
- * section from this every turn, so adding or removing an agent needs zero
- * persona edits. */
+ * who else is on the team; each turn gets this list. */
 export function roster() {
   return Object.entries(loadAgents()).map(([slug, meta]) => ({
     slug,
     name: meta.name,
     role: meta.role || "",
     description: meta.description || "",
-    // Slack only fires app_mention on a real `<@USER_ID>` mention. Plain
-    // "@Name" text never triggers another agent. Fill this in after you
-    // install the agent's Slack app.
+    // Slack only fires a mention on a real `<@USER_ID>`. Used by the Slack
+    // adapter; ignored everywhere else.
     slackUserId: meta.slackUserId || null,
   }));
 }
 
-/** Resolve one agent plus its live secrets.
- *   unknown slug          → null              (receiver → 404)
- *   no Slack creds yet    → { …, secrets:null } (receiver → 503)
- *   complete              → { …, secrets:{…} } */
+/** Resolve one agent's definition. Unknown slug → null. */
 export function resolveAgent(slug) {
   const meta = loadAgents()[slug];
   if (!meta) return null;
@@ -120,22 +103,37 @@ export function resolveAgent(slug) {
     slug,
     name: meta.name,
     role: meta.role || "",
+    // The gateway caller whose allowlist applies (config/gateway.yaml).
     caller: meta.caller || `slack-${slug}`,
     description: meta.description || "",
     personaPath: path.join(ROOT, "agents", meta.persona || `personas/${slug}.md`),
-    // Optional {name: {path, repo, autoMerge}} map. Present → the runner adds
-    // path-scoped write + git tools for those repos (see buildAllowedTools).
+    // Optional {name: {path, repo, autoMerge, writePaths}}: repos this agent
+    // may change (see buildAllowedTools in core/prompt.mjs).
     workRepos: meta.workRepos || null,
-    // Default model ALIAS ("sonnet", "opus", "haiku"), never a dated model ID,
-    // so a new model release needs no config change.
+    // Model ALIAS ("haiku", "sonnet", "opus"), never a dated model ID.
     model: meta.model || "sonnet",
-    // Optional {name: channelId} map of channels this agent may start a fresh
-    // message in. Absent → the agent can only reply where it was triggered.
-    crossPostChannels: meta.crossPostChannels || null,
-    secrets: slackSecrets(slug),
+    // Channel aliases (config/channels.yaml) this agent may post reports to
+    // with the gateway's post_report tool, from any surface.
+    reportsTo: Array.isArray(meta.reportsTo) ? meta.reportsTo : [],
   };
 }
 
 export function loadPersona(personaPath) {
   try { return readFileSync(personaPath, "utf8").trim(); } catch { return ""; }
+}
+
+/** Replace ${VAR} with its live env value (empty string if unset). */
+const interpolate = (v) => String(v ?? "").replace(/\$\{([A-Z0-9_]+)\}/g, (_, k) => envValue(k));
+
+/** Report channels: {alias: {slack: "<channel id>"}} from config/channels.yaml,
+ * with ${VAR} resolved from .env. A channel whose id resolves empty is listed
+ * but unconfigured. */
+export function loadChannels() {
+  let doc = {};
+  try { doc = parseYaml(readFileSync(CHANNELS_FILE, "utf8")) ?? {}; } catch { return {}; }
+  const out = {};
+  for (const [alias, c] of Object.entries(doc.channels ?? {})) {
+    out[alias] = { slack: interpolate(c?.slack), description: c?.description ?? "" };
+  }
+  return out;
 }

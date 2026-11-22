@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * preflight.mjs — check that your agents, automations, and gateway config
+ * preflight.mjs: check that your agents, automations, and gateway config
  * agree with each other, before anything runs. Run it after every config
  * change and in CI. Exit 1 = a problem that will break a run; warnings don't fail.
  *
@@ -11,6 +11,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 import { parse } from "yaml";
 
 const ROOT = process.env.AGENTS_ROOT ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -35,6 +36,7 @@ const autoDoc = load("automations/automations.yaml", parse) ?? {};
 const automations = autoDoc.automations ?? {};
 const agentsDoc = load("agents/agents.json", JSON.parse) ?? {};
 const agents = Object.fromEntries(Object.entries(agentsDoc).filter(([k]) => !k.startsWith("_")));
+const channels = (load("config/channels.yaml", parse) ?? {}).channels ?? {};
 
 // ---- agents ----
 for (const [slug, a] of Object.entries(agents)) {
@@ -43,9 +45,16 @@ for (const [slug, a] of Object.entries(agents)) {
   const persona = path.join("agents", a.persona || `personas/${slug}.md`);
   if (!exists(persona)) flag(`agent ${slug}`, `persona file missing: ${persona}`);
   const caller = a.caller || `slack-${slug}`;
-  if (!callers[caller]) warn(`agent ${slug}`, `no callers.${caller} in config/gateway.yaml — the agent gets no gateway tools`);
-  if (!exists(`memory/${slug}/MEMORY.md`)) warn(`agent ${slug}`, `no memory/${slug}/MEMORY.md — the agent runs without memory`);
-  if (!a.slackUserId) warn(`agent ${slug}`, "no slackUserId — teammates can't mention this agent until you add it");
+  if (!callers[caller]) warn(`agent ${slug}`, `no callers.${caller} in config/gateway.yaml: the agent gets no gateway tools`);
+  if (!exists(`memory/${slug}/MEMORY.md`)) warn(`agent ${slug}`, `no memory/${slug}/MEMORY.md: the agent runs without memory`);
+  if (!a.slackUserId) warn(`agent ${slug}`, "no slackUserId: teammates can't mention this agent until you add it");
+  for (const alias of a.reportsTo ?? []) {
+    if (!channels[alias]) flag(`agent ${slug}`, `reportsTo "${alias}" is not a channel in config/channels.yaml`);
+  }
+  if ((a.reportsTo ?? []).length && callers[caller] && !(callers[caller].allow ?? []).some((g) => g === "*" || g === "post_report")) {
+    warn(`agent ${slug}`, `has reportsTo but callers.${caller} doesn't allow post_report`);
+  }
+  if (a.crossPostChannels) flag(`agent ${slug}`, "crossPostChannels was replaced by reportsTo + config/channels.yaml");
   for (const [repoName, v] of Object.entries(a.workRepos ?? {})) {
     const p = typeof v === "string" ? v : v?.path;
     if (!p) flag(`agent ${slug}`, `workRepos.${repoName} has no path`);
@@ -70,17 +79,20 @@ for (const [name, a] of Object.entries(automations)) {
   if (skills.length && !tools.includes("Skill")) flag(where, `lists skills but does not grant "Skill"`);
   for (const s of skills) if (!exists(`.claude/skills/${s}/SKILL.md`)) flag(where, `skill not found: .claude/skills/${s}/SKILL.md`);
   if (tools.some((t) => t === "mcp__gateway" || t.startsWith("mcp__gateway__")) && !callers[name]) {
-    warn(where, `grants the gateway but config/gateway.yaml has no callers.${name} — it will see no gateway tools`);
+    warn(where, `grants the gateway but config/gateway.yaml has no callers.${name}: it will see no gateway tools`);
   }
-  if (a?.slack?.post_as && !agents[a.slack.post_as]) flag(where, `slack.post_as "${a.slack.post_as}" is not an agent in agents/agents.json`);
-  if (a?.slack?.post_as && !tools.some((t) => t.startsWith("Bash(bash scripts/slack-send.sh"))) {
-    flag(where, `slack.post_as is set but "Bash(bash scripts/slack-send.sh:*)" is not granted`);
+  if (a?.slack) flag(where, "the `slack:` block was replaced by `report: {as, to}`");
+  if (a?.report) {
+    if (!agents[a.report.as]) flag(where, `report.as "${a.report.as}" is not an agent in agents/agents.json`);
+    for (const t of [].concat(a.report.to ?? [])) if (!channels[t]) flag(where, `report.to "${t}" is not a channel in config/channels.yaml`);
+    if (!(callers[name]?.allow ?? []).some((g) => g === "*" || g === "post_report")) flag(where, `has a report target but callers.${name} doesn't allow post_report`);
+    if (!tools.includes("mcp__gateway")) flag(where, `has a report target but doesn't grant "mcp__gateway"`);
   }
   for (const slot of a?.schedule ?? []) {
     const ok = slot && Number.isInteger(slot.hour) && slot.hour >= 0 && slot.hour <= 23 &&
       Number.isInteger(slot.minute) && slot.minute >= 0 && slot.minute <= 59 &&
       (slot.weekday === undefined || (Number.isInteger(slot.weekday) && slot.weekday >= 0 && slot.weekday <= 6));
-    if (!ok) flag(where, `bad schedule entry ${JSON.stringify(slot)} — want {hour 0-23, minute 0-59, weekday? 0-6}`);
+    if (!ok) flag(where, `bad schedule entry ${JSON.stringify(slot)}: want {hour 0-23, minute 0-59, weekday? 0-6}`);
   }
 
   // Drift check: every `git <sub>` in backticks in the prompt must be granted.
@@ -94,10 +106,16 @@ for (const [name, a] of Object.entries(automations)) {
   }
 }
 
+// Generated subagents (gitignored, per machine): warn when they're stale.
+if (exists(".claude/agents")) {
+  const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "agents-sync.mjs"), "--check"], { encoding: "utf8" });
+  if (r.status !== 0) warn("subagents", "files in .claude/agents are out of date; run npm run agents:sync");
+}
+
 for (const w of warnings) console.warn(`warn  ${w}`);
 if (problems.length) {
   for (const p of problems) console.error(`FAIL  ${p}`);
   console.error(`\n${problems.length} problem(s). Fix them before running anything.`);
   process.exit(1);
 }
-console.log(`preflight ok — ${Object.keys(agents).length} agent(s), ${Object.keys(automations).length} automation(s), ${Object.keys(callers).length} gateway caller(s)`);
+console.log(`preflight ok: ${Object.keys(agents).length} agent(s), ${Object.keys(automations).length} automation(s), ${Object.keys(callers).length} gateway caller(s)`);

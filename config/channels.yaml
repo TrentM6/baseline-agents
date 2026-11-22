@@ -1,0 +1,16 @@
+# Report channels: named destinations an agent (or automation) can post a
+# finished result to with the gateway's post_report tool, from any surface.
+#
+# An agent may post only to the aliases listed in its `reportsTo` in
+# agents/agents.json. An automation posts to its `report.to`.
+#
+# Values can reference .env with ${VAR}, so channel ids stay out of git.
+# A channel whose id is empty is "not connected": post_report says so, and the
+# agent hands the person the text instead. Slack is the only adapter today.
+channels:
+  general:
+    description: Where agents share finished work with the whole team
+    slack: "${SLACK_CHANNEL_GENERAL}"
+  digest:
+    description: The weekly knowledge-base digest
+    slack: "${SLACK_CHANNEL_DIGEST}"

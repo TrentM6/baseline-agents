@@ -21,7 +21,7 @@ export async function runSecondOpinion({ model, prompt, system }, caller) {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) {
     throw new Error(
-      "OPENROUTER_API_KEY not set — add it to .env to enable second_opinion"
+      "OPENROUTER_API_KEY not set: add it to .env to enable second_opinion"
     );
   }
   const messages = [];

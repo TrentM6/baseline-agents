@@ -1,4 +1,4 @@
-# Gateway configuration — the ONE place that decides which tools each of your
+# Gateway configuration: the ONE place that decides which tools each of your
 # agents and automations can reach. Deny-by-default: a caller not listed under
 # `callers` sees nothing.
 #
@@ -38,14 +38,14 @@ upstreams: []
 #    oauth_url: https://mcp.example.com/mcp
 
 # ---------------------------------------------------------------------------
-# Structural rules — apply to EVERY caller, the interactive session included.
+# Structural rules: apply to EVERY caller, the interactive session included.
 # ---------------------------------------------------------------------------
 
 # Tools that must not exist for anyone. Make dangerous capabilities absent
 # rather than "not granted": an absent tool can't be unlocked by a later
 # allowlist mistake.
 hard_deny:
-  - "*_send_*"        # e.g. email send — keep outbound messages as drafts
+  - "*_send_*"        # e.g. email send: keep outbound messages as drafts
   - "*_delete_*"
   - "*_trash_*"
   - "github_merge_*"  # agents merge via `gh pr merge --auto`, gated on CI (see README)
@@ -55,7 +55,7 @@ hard_deny:
 read_only: {}
 #  bank: "^bank_(get|list|search|read|fetch)(_|[A-Z])"
 
-# Prefixes visible only to `session` — never to agents or automations.
+# Prefixes visible only to `session`, never to agents or automations.
 # Use for anything that acts as you with no further check (a logged-in browser).
 session_only:
   - browser
@@ -85,11 +85,14 @@ callers:
       - read_file
       - list_automations
       - trigger_automation
+      - post_report
 
   # The example automation: reads the KB, writes nothing through the gateway
-  # (it writes its output file with Claude Code's own Write tool).
+  # (it writes its output file with Claude Code's own Write tool) except one
+  # report to its channel.
   kb-digest:
     allow:
       - kb_search
       - kb_read_page
       - kb_list_pages
+      - post_report

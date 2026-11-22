@@ -1,4 +1,4 @@
-// kb.mjs — the knowledge-base table of contents every agent turn is given.
+// kb.mjs: the knowledge-base table of contents every agent turn is given.
 //
 // Agents read the real pages themselves (Read/Grep/Glob, or the gateway's
 // kb_* tools). This map tells them WHICH pages exist, so they read the right
@@ -36,7 +36,7 @@ export function kbMap() {
   }
   for (const c of categories()) {
     const idx = safeRead(path.join(KB, c, "index.md"));
-    if (idx) parts.push(`## kb/${c}/ — pages\n` + idx.slice(0, INDEX_CAP));
+    if (idx) parts.push(`## kb/${c}/: pages\n` + idx.slice(0, INDEX_CAP));
   }
   return parts.join("\n\n");
 }

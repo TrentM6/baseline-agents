@@ -30,7 +30,7 @@ export async function executeTool({ caller, name, args, clients, policy }) {
     if (name === "second_opinion") {
       result = { content: [{ type: "text", text: await runSecondOpinion(args ?? {}, caller) }] };
     } else if (isLocalTool(name)) {
-      result = await runLocalTool(name, args ?? {});
+      result = await runLocalTool(name, args ?? {}, caller);
     } else {
       result = await callUpstream(clients, name, args);
     }

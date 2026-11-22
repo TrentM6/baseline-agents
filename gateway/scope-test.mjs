@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * scope-test.mjs — prove the gateway's permission model does what you think.
+ * scope-test.mjs: prove the gateway's permission model does what you think.
  *
  * Part 1 runs fixed cases against a built-in fixture config, so the guards
  * themselves are tested no matter what your config says.
@@ -16,7 +16,7 @@ import { loadGatewayConfig } from "./src/config.mjs";
 let failures = 0;
 const check = (name, cond, detail = "") => {
   if (cond) console.log(`  ok   ${name}`);
-  else { failures++; console.error(`  FAIL ${name}${detail ? ` — ${detail}` : ""}`); }
+  else { failures++; console.error(`  FAIL ${name}${detail ? `: ${detail}` : ""}`); }
 };
 
 console.log("Guards (fixture config):");

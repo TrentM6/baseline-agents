@@ -63,14 +63,14 @@ function definitions() {
 /**
  * Connect all upstreams. Returns { clients, tools } where tools carry
  * namespaced names (<prefix>_<original>). A failed upstream logs to stderr and
- * is skipped — the gateway serves whatever connected.
+ * is skipped: the gateway serves whatever connected.
  */
 export async function connectUpstreams() {
   const clients = new Map();
   const tools = [];
   const defs = definitions().filter((def) => {
     if (!def.oauthUrl || hasOAuthToken(def.oauthUrl)) return true;
-    console.error(`[gateway] skipping "${def.prefix}" — no cached OAuth token; authorize it once interactively`);
+    console.error(`[gateway] skipping "${def.prefix}": no cached OAuth token; authorize it once interactively`);
     return false;
   });
 

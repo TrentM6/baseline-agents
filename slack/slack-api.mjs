@@ -1,4 +1,4 @@
-// slack-api.mjs — the Slack Web API calls the runner needs, hand-rolled on
+// slack-api.mjs: the Slack Web API calls the runner needs, hand-rolled on
 // Node built-ins (global fetch) so the Slack runtime has no npm dependencies.
 //
 // WHY the retry loop: Slack rate-limits per method (HTTP 429 + Retry-After, or a
@@ -36,10 +36,10 @@ async function call(method, token, body) {
   return { ok: false, error: "ratelimited_giveup" };
 }
 
-// chat.postMessage — thread_ts aware (omit it for a top-level post). icon_url
+// chat.postMessage: thread_ts aware (omit it for a top-level post). icon_url
 // overrides the per-message avatar (requires the chat:write.customize scope);
 // omit it and Slack falls back to the app's own configured icon. `blocks` is
-// optional Block Kit output from format-blocks.mjs's toSlackMessage() — `text`
+// optional Block Kit output from format-blocks.mjs's toSlackMessage(): `text`
 // still goes through as the notification-preview fallback either way.
 export function postMessage(token, { channel, text, blocks, thread_ts, icon_url }) {
   const body = { channel, text };
@@ -49,12 +49,12 @@ export function postMessage(token, { channel, text, blocks, thread_ts, icon_url 
   return call("chat.postMessage", token, body);
 }
 
-// reactions.add — used as a lightweight "seen" ack on the triggering message.
+// reactions.add: used as a lightweight "seen" ack on the triggering message.
 export function addReaction(token, { channel, timestamp, name }) {
   return call("reactions.add", token, { channel, timestamp, name });
 }
 
-// conversations.replies — the thread history a turn needs for context. Read
+// conversations.replies: the thread history a turn needs for context. Read
 // methods take query params (GET), not a JSON body, so this doesn't reuse
 // call(). Returns the raw Slack response; callers treat failure as "no
 // context available" rather than an error (the turn still runs).
@@ -70,7 +70,7 @@ export async function fetchReplies(token, { channel, ts, limit = 12 }) {
   }
 }
 
-// auth.test — resolve the bot's own user/bot id (used to suppress self-replies).
+// auth.test: resolve the bot's own user/bot id (used to suppress self-replies).
 export function authTest(token) {
   return call("auth.test", token, {});
 }

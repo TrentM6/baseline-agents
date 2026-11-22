@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A team of agents that works for you in Slack, each with its own skills, memory and schedule.",
+  "description": "A team of agents that works wherever you do, each with its own skills, memory and schedule.",
   "engines": {
     "node": ">=20"
   },
@@ -14,12 +14,13 @@
     "preflight": "node scripts/preflight.mjs",
     "selftest": "node slack/selftest.mjs",
     "scope-test": "node gateway/scope-test.mjs",
-    "test": "node scripts/preflight.mjs && node gateway/scope-test.mjs && node slack/selftest.mjs",
+    "test": "node scripts/preflight.mjs && node gateway/scope-test.mjs && node core/selftest.mjs && node slack/selftest.mjs",
     "schedule": "node scripts/schedule.mjs print",
     "schedule:install": "node scripts/schedule.mjs install",
     "schedule:uninstall": "node scripts/schedule.mjs uninstall",
     "receiver:install": "node scripts/schedule.mjs install-receiver",
-    "smoke-test": "node gateway/smoke-test.mjs"
+    "smoke-test": "node gateway/smoke-test.mjs",
+    "agents:sync": "node scripts/agents-sync.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

@@ -41,7 +41,7 @@ try {
 } catch {
   const age = Date.now() - fs.statSync(lockDir).mtimeMs;
   if (age < maxRuntimeMs + 60_000) {
-    console.error(`[run-automation] ${name} already running (lock age ${Math.round(age / 1000)}s) — exiting`);
+    console.error(`[run-automation] ${name} already running (lock age ${Math.round(age / 1000)}s): exiting`);
     process.exit(0);
   }
   // stale lock: the previous run died hard; take over
@@ -55,7 +55,7 @@ const scheduledToday = readRuns().filter(
 ).length;
 if (trigger === "schedule" && scheduledToday >= maxRunsPerDay) {
   appendRun({ ts: new Date().toISOString(), automation: name, trigger, status: "skipped_cap" });
-  console.error(`[run-automation] ${name} hit daily cap (${maxRunsPerDay}) — skipping`);
+  console.error(`[run-automation] ${name} hit daily cap (${maxRunsPerDay}): skipping`);
   process.exit(0);
 }
 
@@ -73,32 +73,25 @@ try {
 // Every automation runs headless: a denied tool can never be approved, so
 // flailing against the allowlist only burns turns until the timeout.
 const HEADLESS_DISCIPLINE =
-  "You run unattended — no one can approve a permission prompt. Stay strictly inside your allowed tools: prefer Glob/Grep/Read over shell commands, and never write shell loops or pipelines. If a tool call is denied, do not retry it in another form; note the gap in your final summary and continue with what you can do. " +
+  "You run unattended: no one can approve a permission prompt. Stay strictly inside your allowed tools: prefer Glob/Grep/Read over shell commands, and never write shell loops or pipelines. If a tool call is denied, do not retry it in another form; note the gap in your final summary and continue with what you can do. " +
   // An automation has no next turn: the process exits with your final message,
   // so a backgrounded command is killed unfinished while the run still logs ok.
   "NEVER run a Bash command in the background and never end your turn waiting on one. Run every command in the foreground, read its output, then continue.";
 
-// ---- Slack identity for this run (optional) ----
+// ---- report target (optional): the gateway's post_report enforces it ----
 const childEnv = { ...process.env, AGENTS_CALLER: name, AGENTS_ROOT: ROOT };
 delete childEnv.SLACK_BOT_TOKEN;
-let slackHint = "";
-if (automation.slack?.post_as) {
-  const token = process.env[`SLACK_${envSlug(automation.slack.post_as)}_BOT_TOKEN`];
-  const channel = automation.slack.channel_env ? process.env[automation.slack.channel_env] : "";
-  if (token && channel) {
-    childEnv.SLACK_BOT_TOKEN = token;
-    slackHint = `\n\nSlack posting is configured for this run. Channel id: ${channel}. Post with \`bash scripts/slack-send.sh ${channel}\` (message on stdin).`;
-  } else {
-    slackHint = "\n\nSlack posting is NOT configured for this run (no bot token or channel id in .env). Skip any Slack step and say so in your final message.";
-  }
-}
+const reportTo = automation.report?.to ? [].concat(automation.report.to) : [];
+const reportHint = reportTo.length
+  ? `\n\nTo share your result, use the gateway tool mcp__gateway__post_report with "to": ${reportTo.map((t) => `"${t}"`).join(" or ")}. If it says the channel isn't connected, skip the post and say so in your final message.`
+  : "";
 
 const args = [
   "-p", prompt,
   "--output-format", "json",
   "--max-turns", String(automation.max_turns ?? 40),
-  "--append-system-prompt", HEADLESS_DISCIPLINE + skillsHint(automation.skills) + slackHint,
-  // The gateway only — your account-level MCP servers must not leak in.
+  "--append-system-prompt", HEADLESS_DISCIPLINE + skillsHint(automation.skills) + reportHint,
+  // The gateway only: your account-level MCP servers must not leak in.
   "--mcp-config", path.join(ROOT, ".mcp.json"),
   "--strict-mcp-config",
 ];
@@ -174,17 +167,17 @@ execFile(
     const reason = failed
       ? (error
           ? `${error.killed ? "timeout/killed" : "exit error"}: ${String(error).slice(0, 300)}`
-          : `claude returned an error envelope or unparseable output${envelope?.subtype ? ` (${envelope.subtype})` : ""}${denials ? ` — ${denials} permission denial(s)` : ""}`)
+          : `claude returned an error envelope or unparseable output${envelope?.subtype ? ` (${envelope.subtype})` : ""}${denials ? `: ${denials} permission denial(s)` : ""}`)
       : abandonedBackground
-        ? `run claimed work was left "in the background" — that work was killed with the run; see logs/automations/${name}/${stamp}.json`
-        : `run completed but hit ${denials} permission denials — prompt/permission drift; see logs/automations/${name}/${stamp}.json`;
+        ? `run claimed work was left "in the background": that work was killed with the run; see logs/automations/${name}/${stamp}.json`
+        : `run completed but hit ${denials} permission denials: prompt/permission drift; see logs/automations/${name}/${stamp}.json`;
 
     if (failed) {
       writeFailure(ts, reason, (stdout + "\n" + stderr).slice(-2000));
-      console.error(`[run-automation] ${name} FAILED — see logs/LAST_FAILURE.md`);
+      console.error(`[run-automation] ${name} FAILED: see logs/LAST_FAILURE.md`);
       process.exitCode = 1;
     } else {
-      console.error(`[run-automation] ${name} DEGRADED — ${reason}`);
+      console.error(`[run-automation] ${name} DEGRADED: ${reason}`);
     }
 
     // Optional Slack alert. A self-healing automation can set
@@ -193,7 +186,7 @@ execFile(
     const alertAfter = failed ? (automation.alert_after_failures ?? 1) : 1;
     const streak = failed ? consecutiveFailures(name) : 0;
     if (failed && streak < alertAfter) {
-      console.error(`[run-automation] ${name} failed ${streak}/${alertAfter} — alert held`);
+      console.error(`[run-automation] ${name} failed ${streak}/${alertAfter}: alert held`);
       return;
     }
     const alertCh = process.env.ALERT_CHANNEL_ID;
@@ -202,8 +195,8 @@ execFile(
     if (!alertCh || !tok) return;
     const who = process.env.OPERATOR_SLACK_ID ? `<@${process.env.OPERATOR_SLACK_ID}> ` : "";
     const text = failed
-      ? `${who}:rotating_light: automation *${name}* failed${streak > 1 ? ` (${streak} runs in a row)` : ""} (${trigger}) — ${reason.slice(0, 200)}`
-      : `${who}:warning: automation *${name}* is degrading (${trigger}) — ${reason.slice(0, 250)}`;
+      ? `${who}:rotating_light: automation *${name}* failed${streak > 1 ? ` (${streak} runs in a row)` : ""} (${trigger}): ${reason.slice(0, 200)}`
+      : `${who}:warning: automation *${name}* is degrading (${trigger}): ${reason.slice(0, 250)}`;
     fetch("https://slack.com/api/chat.postMessage", {
       method: "POST",
       headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json; charset=utf-8" },
@@ -224,10 +217,10 @@ function skillsHint(skillNames) {
       const m = fs.readFileSync(path.join(ROOT, ".claude/skills", s, "SKILL.md"), "utf8").match(/^description:\s*(.+)$/m);
       if (m) desc = m[1].trim();
     } catch {}
-    lines.push(`- ${s}${desc ? ` — ${desc}` : ""}`);
+    lines.push(`- ${s}${desc ? `: ${desc}` : ""}`);
   }
   if (!lines.length) return "";
-  return "\n\nSkills available to you — invoke one with the Skill tool, then follow its playbook as the authoritative procedure:\n" + lines.join("\n");
+  return "\n\nSkills available to you: invoke one with the Skill tool, then follow its playbook as the authoritative procedure:\n" + lines.join("\n");
 }
 
 function readRuns() {

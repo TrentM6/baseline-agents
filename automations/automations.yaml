@@ -19,8 +19,8 @@
 #   max_turns          Claude Code --max-turns
 #   alert_after_failures  page only after N failures in a row (default 1)
 #   agent_triggerable  true → agents may run it via the trigger_automation tool
-#   slack.post_as      agent slug whose bot token the run posts with
-#   slack.channel_env  name of the .env variable holding the channel id
+#   report.as          agent the run posts as (its post_report identity)
+#   report.to          channel alias(es) from config/channels.yaml it may post to
 #
 # Check your changes:  npm run preflight
 
@@ -36,7 +36,6 @@ automations:
       - "Edit(./files/**)"   # writes allowed ONLY under files/ (Edit rules govern Write too)
       - "Skill"
       - "mcp__gateway"
-      - "Bash(bash scripts/slack-send.sh:*)"
     skills:
       - kb-digest
     model: sonnet
@@ -44,6 +43,6 @@ automations:
     max_runs_per_day: 2
     max_turns: 20
     agent_triggerable: true
-    slack:
-      post_as: scout
-      channel_env: DIGEST_CHANNEL_ID
+    report:
+      as: scout
+      to: digest

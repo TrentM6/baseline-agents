@@ -1,4 +1,5 @@
-// receiver.mjs — one HTTP endpoint serving every agent's Slack Events API.
+// receiver.mjs: the Slack adapter's HTTP endpoint, serving every agent's Slack
+// Events API. Optional: agents work locally without it.
 //
 // One process, one port (default 127.0.0.1:8790). Put a TLS-terminating proxy
 // in front of it (see infra/Caddyfile.example) or a tunnel for local testing.
@@ -17,8 +18,14 @@ import http from "node:http";
 import crypto from "node:crypto";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { ROOT, ENV_FILE, resolveAgent, loadSharedEnv, warnIfNoApiKey } from "./config.mjs";
-import { handleEvent, installShutdownHandlers } from "./runner.mjs";
+import { ROOT, ENV_FILE, resolveAgent as resolveCore, loadSharedEnv, warnIfNoApiKey } from "../core/config.mjs";
+import { handleEvent, installShutdownHandlers, slackSecrets } from "./turn.mjs";
+
+// The core agent plus its live Slack credentials (re-read on every event).
+function resolveAgent(slug) {
+  const agent = resolveCore(slug);
+  return agent ? { ...agent, secrets: slackSecrets(slug) } : null;
+}
 
 const PORT = Number(process.env.SLACK_RECEIVER_PORT || 8790);
 const HOST = process.env.SLACK_RECEIVER_HOST || "127.0.0.1";
@@ -151,7 +158,7 @@ export function start(port = PORT) {
   installShutdownHandlers();
   try { mkdirSync(path.join(ROOT, "logs/slack-agent"), { recursive: true }); } catch {}
   const server = http.createServer((req, res) => { handle(req, res).catch((e) => { log(`unhandled: ${e.message}`); try { sendText(res, 500, "error"); } catch {} }); });
-  return new Promise((resolve) => server.listen(port, HOST, () => { log(`listening on ${HOST}:${port} — env file ${ENV_FILE}`); resolve(server); }));
+  return new Promise((resolve) => server.listen(port, HOST, () => { log(`listening on ${HOST}:${port}: env file ${ENV_FILE}`); resolve(server); }));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) start();

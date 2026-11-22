@@ -3,7 +3,7 @@ import { loadGatewayConfig, agentTriggerable } from "./config.mjs";
 /**
  * The gateway's permission model. Two layers, both deny-by-default:
  *
- * 1. NAME level — is tool X visible/callable for caller Y?
+ * 1. NAME level: is tool X visible/callable for caller Y?
  *    - `hard_deny` globs: never visible to ANY caller, sessions included.
  *      Use these for capabilities that must not exist (sending email,
  *      deleting data, merging). A capability that is absent can't be
@@ -15,7 +15,7 @@ import { loadGatewayConfig, agentTriggerable } from "./config.mjs";
  *      caller, never to agents or automations (e.g. a logged-in browser).
  *    - `callers.<name>.allow` globs: the per-caller grant.
  *
- * 2. ARGUMENT level — scopeViolation(): GitHub calls must name an
+ * 2. ARGUMENT level: scopeViolation(): GitHub calls must name an
  *    allowlisted repo (and the configured owner); account-wide searches are
  *    denied because the token can usually see more than agents may touch.
  *    trigger_automation may only name an `agent_triggerable` automation.

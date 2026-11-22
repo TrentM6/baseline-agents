@@ -16,7 +16,7 @@ export function loadGatewayConfig() {
   try {
     return parse(readFileSync(file, "utf8")) ?? {};
   } catch (e) {
-    console.error(`[gateway] cannot read ${file}: ${e.message} — interactive sessions get local tools only, every other caller gets nothing`);
+    console.error(`[gateway] cannot read ${file}: ${e.message}: interactive sessions get local tools only, every other caller gets nothing`);
     return {};
   }
 }
@@ -32,6 +32,17 @@ export function agentTriggerable() {
     );
   } catch {
     return new Set();
+  }
+}
+
+/** An automation's report target from automations.yaml: { as, to } or null. */
+export function automationReport(name) {
+  try {
+    const doc = parse(readFileSync(path.join(ROOT, "automations", "automations.yaml"), "utf8")) ?? {};
+    const r = doc.automations?.[name]?.report;
+    return r?.as && r?.to ? { as: String(r.as), to: [].concat(r.to).map(String) } : null;
+  } catch {
+    return null;
   }
 }
 

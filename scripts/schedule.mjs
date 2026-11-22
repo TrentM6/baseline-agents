@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * schedule.mjs — turn automations.yaml schedules into real OS jobs.
+ * schedule.mjs: turn automations.yaml schedules into real OS jobs.
  *
  *   node scripts/schedule.mjs print              show what would be installed (default)
  *   node scripts/schedule.mjs install            install/refresh every automation's job
@@ -189,7 +189,7 @@ if (mode === "print") {
     sh("systemctl", ["--user", "daemon-reload"]);
     sh("systemctl", ["--user", "enable", "--now", `${label}.service`]);
   }
-  console.log(`  installed ${label} — logs in logs/scheduler/slack-receiver.log${isMac ? "" : " (or journalctl --user -u " + label + ")"}`);
+  console.log(`  installed ${label}: logs in logs/scheduler/slack-receiver.log${isMac ? "" : " (or journalctl --user -u " + label + ")"}`);
 } else if (mode === "uninstall") {
   for (const l of existingLabels()) retire(l);
   const recv = `${PREFIX}.slack-receiver`;
