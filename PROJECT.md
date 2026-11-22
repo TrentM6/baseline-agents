@@ -1,6 +1,6 @@
 # baseline-agents
 
-Goal: A framework anyone can run to operate their own team of Claude agents in Slack and on a schedule, with skills, per-agent memory, a knowledge base, and a permissioned MCP tool gateway.
+Goal: A team of agents that works for you in Slack, each with its own skills, memory and schedule — open source, set up through config.
 
 ## Now
 - First version built: Slack receiver + runner, MCP gateway with per-caller policy, automation runner with caps and alerts, scheduler installer (launchd/systemd), example agent (Scout) and automation (kb-digest)
@@ -14,4 +14,4 @@ Goal: A framework anyone can run to operate their own team of Claude agents in S
 - Add a second example agent that does repo work (workRepos + PR flow)
 
 ## Log
-- 2026-11-22 — Created the repo; framework copied and generalized from the agent runtime that runs the studio's own agents; first local commit
+- 2026-11-22 — Created the repo: Slack runtime, MCP gateway, automation runner, scheduler, example agent and automation; first local commit

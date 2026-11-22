@@ -1,6 +1,6 @@
 # Baseline Agents
 
-Run your own team of AI agents. Each agent has a name, a persona, a memory, and a set of tools it is allowed to use. Your team talks to them in Slack, and they also run jobs on a schedule: a Monday digest, a nightly check, a daily report.
+A team of agents that works for you in Slack, each with its own skills, memory and schedule. Each agent has a name, a persona, and a set of tools it is allowed to use. You and your team mention them in Slack, and they run jobs on their own on a schedule: a Monday digest, a nightly check, a daily report.
 
 Every agent turn is a headless [Claude Code](https://docs.claude.com/en/docs/claude-code) run, so your agents can read files, follow skills, and use tools the way Claude Code does. Around that, this repo gives you:
 

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Run your own team of Claude agents in Slack and on a schedule — with skills, memory, a knowledge base, and a permissioned tool gateway.",
+  "description": "A team of agents that works for you in Slack, each with its own skills, memory and schedule.",
   "engines": {
     "node": ">=20"
   },
