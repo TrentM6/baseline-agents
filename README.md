@@ -271,3 +271,7 @@ infra/           Slack app manifest, Caddy example
 files/           automation outputs (gitignored)
 logs/            runtime logs (gitignored)
 ```
+
+## License
+
+MIT — see `LICENSE`. Copy it, change it, build your own agents on it.
