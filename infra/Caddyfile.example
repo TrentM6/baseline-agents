@@ -1,0 +1,17 @@
+# Example Caddy config: public HTTPS → the Slack receiver on loopback.
+# Caddy fetches and renews the TLS certificate for your domain automatically.
+#   1. Point a DNS A record for agents.example.com at this server.
+#   2. Replace agents.example.com below, save as /etc/caddy/Caddyfile.
+#   3. sudo systemctl reload caddy
+#
+# Only /slack/events/* is exposed. Slack can't do browser sign-in, so this route
+# is authenticated by Slack's request signature, which the receiver verifies on
+# every request. Everything else returns 404.
+agents.example.com {
+	handle /slack/events/* {
+		reverse_proxy 127.0.0.1:8790
+	}
+	handle {
+		respond 404
+	}
+}

@@ -1,0 +1,36 @@
+# Slack app manifest for ONE agent. Create one Slack app per agent:
+#   api.slack.com/apps → Create New App → From a manifest → paste this.
+# Replace the three placeholders:
+#   AGENT_NAME        the agent's display name (e.g. Scout)
+#   AGENT_SLUG        its key in agents/agents.json (e.g. scout)
+#   YOUR_PUBLIC_HOST  the HTTPS host that reaches your receiver
+display_information:
+  name: AGENT_NAME
+  description: One of your agents. Answers when mentioned or messaged.
+features:
+  app_home:
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: AGENT_NAME
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read     # receive @mentions
+      - chat:write            # reply
+      - chat:write.customize  # per-agent avatar (optional, see AVATAR_BASE_URL)
+      - channels:history      # read the thread for context (public channels)
+      - groups:history        # same, private channels the app is in
+      - im:history            # direct messages
+      - reactions:write       # the 👀 "seen" reaction
+      - users:read
+settings:
+  event_subscriptions:
+    request_url: https://YOUR_PUBLIC_HOST/slack/events/AGENT_SLUG
+    bot_events:
+      - app_mention
+      - message.im
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

@@ -1,0 +1,49 @@
+# Scheduled automations. Each one is a headless `claude -p` run with a prompt,
+# a tool allowlist, and optional skills, executed by scripts/run-automation.sh.
+#
+# Fields:
+#   prompt_file        path to the prompt (keep it thin: point at a skill)
+#   schedule           list of {hour, minute, weekday?} in the machine's local
+#                      time; weekday 0-6 = Sun-Sat, omit for every day.
+#                      `npm run schedule:install` turns these into launchd jobs
+#                      (macOS) or systemd timers (Linux). Nothing runs until then.
+#   allowed_tools      Claude Code permission syntax. Scope file tools to the repo
+#                      (Read(./**), Edit(./files/**)); a bare "Read" reaches the
+#                      whole filesystem. File writes are governed by Edit(path)
+#                      rules; a Write(path) rule is silently ignored. "mcp__gateway" grants the gateway, which
+#                      then applies config/gateway.yaml → callers.<name>.
+#   skills             skills the run may load (also grant "Skill")
+#   model              alias: sonnet | opus | haiku (optional)
+#   max_runtime        seconds before the run is killed
+#   max_runs_per_day   cap on scheduled runs (manual and agent runs bypass it)
+#   max_turns          Claude Code --max-turns
+#   alert_after_failures  page only after N failures in a row (default 1)
+#   agent_triggerable  true → agents may run it via the trigger_automation tool
+#   slack.post_as      agent slug whose bot token the run posts with
+#   slack.channel_env  name of the .env variable holding the channel id
+#
+# Check your changes:  npm run preflight
+
+automations:
+  kb-digest:
+    prompt_file: automations/prompts/kb-digest.md
+    schedule:
+      - { weekday: 1, hour: 9, minute: 0 }   # Mondays 09:00
+    allowed_tools:
+      - "Read(./**)"    # ./** keeps reads inside this repo
+      - "Glob(./**)"
+      - "Grep(./**)"
+      - "Edit(./files/**)"   # writes allowed ONLY under files/ (Edit rules govern Write too)
+      - "Skill"
+      - "mcp__gateway"
+      - "Bash(bash scripts/slack-send.sh:*)"
+    skills:
+      - kb-digest
+    model: sonnet
+    max_runtime: 300
+    max_runs_per_day: 2
+    max_turns: 20
+    agent_triggerable: true
+    slack:
+      post_as: scout
+      channel_env: DIGEST_CHANNEL_ID

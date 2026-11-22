@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "gateway": {
+      "command": "node",
+      "args": ["gateway/src/index.mjs"]
+    }
+  }
+}

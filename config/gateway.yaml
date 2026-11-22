@@ -1,0 +1,95 @@
+# Gateway configuration — the ONE place that decides which tools each of your
+# agents and automations can reach. Deny-by-default: a caller not listed under
+# `callers` sees nothing.
+#
+# Caller names:
+#   session            you, at a terminal running `claude` in this repo
+#   slack-<agent-slug> an agent answering in Slack (or via scripts/ask.mjs)
+#   <automation-name>  a scheduled automation from automations/automations.yaml
+#
+# After editing, run:  npm run scope-test
+
+# ---------------------------------------------------------------------------
+# Upstream MCP servers. Each one's tools appear as <prefix>_<tool>.
+# Nothing is enabled out of the box; the example agent only uses local tools.
+# Uncomment and adapt. Prefer installing an upstream as an npm dependency and
+# running it with `node` over `npx` (npx re-checks the registry on every
+# spawn and hangs when the network is down).
+# ---------------------------------------------------------------------------
+upstreams: []
+#  - prefix: github
+#    # GitHub's official server: https://github.com/github/github-mcp-server
+#    command: github-mcp-server
+#    args: [stdio]
+#    env:
+#      GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+#
+#  - prefix: hn
+#    # npm install @devabdultech/hn-mcp-server
+#    command: node
+#    args: ["./node_modules/@devabdultech/hn-mcp-server/dist/index.js"]
+#
+#  - prefix: docs
+#    # A remote MCP server behind OAuth, via mcp-remote (npm install mcp-remote).
+#    # Authorize once by running the same command by hand; the gateway skips
+#    # it until ~/.mcp-auth holds a token for oauth_url.
+#    command: node
+#    args: ["./node_modules/mcp-remote/dist/proxy.js", "https://mcp.example.com/mcp"]
+#    oauth_url: https://mcp.example.com/mcp
+
+# ---------------------------------------------------------------------------
+# Structural rules — apply to EVERY caller, the interactive session included.
+# ---------------------------------------------------------------------------
+
+# Tools that must not exist for anyone. Make dangerous capabilities absent
+# rather than "not granted": an absent tool can't be unlocked by a later
+# allowlist mistake.
+hard_deny:
+  - "*_send_*"        # e.g. email send — keep outbound messages as drafts
+  - "*_delete_*"
+  - "*_trash_*"
+  - "github_merge_*"  # agents merge via `gh pr merge --auto`, gated on CI (see README)
+
+# For an upstream named here, ONLY tools matching the regex exist. Anything
+# else under that prefix (including tools the upstream adds later) is denied.
+read_only: {}
+#  bank: "^bank_(get|list|search|read|fetch)(_|[A-Z])"
+
+# Prefixes visible only to `session` — never to agents or automations.
+# Use for anything that acts as you with no further check (a logged-in browser).
+session_only:
+  - browser
+
+# GitHub scope. Every github_* call must name a repo on this list; calls
+# naming another owner are denied; account-wide searches are denied.
+github:
+  owner: your-github-username
+  repo_allowlist: []
+  #  - your-github-username/your-website
+
+# ---------------------------------------------------------------------------
+# Per-caller allowlists (globs over tool names).
+# ---------------------------------------------------------------------------
+callers:
+  session:
+    allow: ["*"]
+
+  # The example agent: reads the knowledge base and skills, nothing else.
+  slack-scout:
+    allow:
+      - kb_search
+      - kb_read_page
+      - kb_list_pages
+      - list_skills
+      - read_skill
+      - read_file
+      - list_automations
+      - trigger_automation
+
+  # The example automation: reads the KB, writes nothing through the gateway
+  # (it writes its output file with Claude Code's own Write tool).
+  kb-digest:
+    allow:
+      - kb_search
+      - kb_read_page
+      - kb_list_pages

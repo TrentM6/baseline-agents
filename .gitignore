@@ -1,0 +1,20 @@
+# secrets — never committed
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# runtime state (run logs, sessions, receipts, locks)
+logs/*
+!logs/.gitkeep
+
+# automation outputs are regenerated each run; commit the ones you want to keep
+files/*
+!files/.gitkeep
+
+# repos your agents work in (cloned locally, each with its own git)
+workspaces/
+
+node_modules/
+.DS_Store

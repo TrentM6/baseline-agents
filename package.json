@@ -1,0 +1,28 @@
+{
+  "name": "baseline-agents",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Run your own team of Claude agents in Slack and on a schedule — with skills, memory, a knowledge base, and a permissioned tool gateway.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "ask": "node scripts/ask.mjs",
+    "receiver": "node slack/receiver.mjs",
+    "automation": "bash scripts/run-automation.sh",
+    "preflight": "node scripts/preflight.mjs",
+    "selftest": "node slack/selftest.mjs",
+    "scope-test": "node gateway/scope-test.mjs",
+    "test": "node scripts/preflight.mjs && node gateway/scope-test.mjs && node slack/selftest.mjs",
+    "schedule": "node scripts/schedule.mjs print",
+    "schedule:install": "node scripts/schedule.mjs install",
+    "schedule:uninstall": "node scripts/schedule.mjs uninstall",
+    "receiver:install": "node scripts/schedule.mjs install-receiver",
+    "smoke-test": "node gateway/smoke-test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "yaml": "^2.5.0"
+  }
+}
