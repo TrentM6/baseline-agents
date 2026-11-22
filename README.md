@@ -186,7 +186,15 @@ Write pages so an agent can answer from the page alone: exact names, numbers, st
 
 A skill is a playbook in `.claude/skills/<name>/SKILL.md`: frontmatter with a `name` and a `description` that says *when* to use it, then the procedure. Agents load skills with Claude Code's Skill tool; working in another folder, they read them from this repo. Automations list the skills they may use under `skills:` and must grant `"Skill"`.
 
-`.claude/skills/kb-digest/SKILL.md` is the example. Keep each skill to one workflow, and put the procedure in the skill rather than in an automation's prompt, so every way of running the agent follows the same steps.
+Three example skills ship with the repo:
+
+| Skill | What it does | Tools the agent needs |
+|---|---|---|
+| `kb-digest` | Weekly digest of what changed in `kb/`, written to `files/kb-digest.md` | none beyond reading the repo |
+| `daily-brief` | A personal morning brief (what happened, what's waiting, what to do today), refreshed during the day, as a document, a chat message or an at-a-glance view | read access to wherever your day lives: email, calendar, issues, logs (grant them in the agent's `tools`) |
+| `social-listening` | A running, cited pulse on a market, technology or community, with a digest and a living landscape page in `kb/` that gets sharper each week. Read-only: it never posts or replies | web access, e.g. `"tools": ["WebSearch", "WebFetch"]` |
+
+Give a skill to an agent by mentioning it in the agent's persona ("load the social-listening skill for any pulse or sweep"), or to an automation with `skills:`. Keep each skill to one workflow, and put the procedure in the skill rather than in an automation's prompt, so every way of running the agent follows the same steps.
 
 ## Memory
 
