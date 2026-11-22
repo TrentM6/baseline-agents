@@ -15,7 +15,7 @@ last_verified: 2026-01-01
 
 ## What we do
 
-Example Co. builds scheduling software for small clinics. The product is called Calendar Desk.
+Example Co. (a fictional company) builds scheduling software for small clinics. The product is called Example Scheduler.
 
 ## Plans and pricing
 

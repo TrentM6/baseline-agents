@@ -10,7 +10,7 @@
  *   npm run ask -- scout "What plans do we sell?"
  *   npm run ask -- scout "anything" --show-prompt   # print the system prompt and tools, run nothing
  */
-import { loadSharedEnv, resolveAgent, loadAgents } from "../slack/config.mjs";
+import { loadSharedEnv, resolveAgent, loadAgents, warnIfNoApiKey } from "../slack/config.mjs";
 import { buildSystem, buildAllowedTools, runClaude, stripSentinel, chooseModelAlias } from "../slack/runner.mjs";
 
 const [slug, ...rest] = process.argv.slice(2);
@@ -36,6 +36,7 @@ if (showPrompt) {
   process.exit(0);
 }
 
+warnIfNoApiKey("ask");
 console.error(`[ask] ${agent.name} (${chooseModelAlias(agent, question)}) is thinking…`);
 const r = await runClaude({
   agent,

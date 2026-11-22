@@ -111,6 +111,9 @@ if (automation.model) args.push("--model", automation.model);
 const localBin = path.join(os.homedir(), ".local/bin");
 childEnv.PATH = childEnv.PATH ? `${localBin}${path.delimiter}${childEnv.PATH}` : localBin;
 
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.error("[run-automation] WARNING: ANTHROPIC_API_KEY is not set, so Claude Code will use whatever login is on this machine. See README → Claude credentials.");
+}
 const startedAt = new Date();
 console.error(`[run-automation] ${name} starting (trigger=${trigger})`);
 

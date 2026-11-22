@@ -17,7 +17,7 @@ import http from "node:http";
 import crypto from "node:crypto";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { ROOT, ENV_FILE, resolveAgent, loadSharedEnv } from "./config.mjs";
+import { ROOT, ENV_FILE, resolveAgent, loadSharedEnv, warnIfNoApiKey } from "./config.mjs";
 import { handleEvent, installShutdownHandlers } from "./runner.mjs";
 
 const PORT = Number(process.env.SLACK_RECEIVER_PORT || 8790);
@@ -147,6 +147,7 @@ async function handle(req, res) {
 /** Start the server. Exported so the offline selftest can boot it on a test port. */
 export function start(port = PORT) {
   loadSharedEnv();
+  if (!process.env.SLACK_AGENT_DRY_RUN) warnIfNoApiKey("slack-receiver");
   installShutdownHandlers();
   try { mkdirSync(path.join(ROOT, "logs/slack-agent"), { recursive: true }); } catch {}
   const server = http.createServer((req, res) => { handle(req, res).catch((e) => { log(`unhandled: ${e.message}`); try { sendText(res, 500, "error"); } catch {} }); });

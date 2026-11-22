@@ -37,7 +37,7 @@ schedule ──▶ scripts/run-automation.sh ──▶ claude -p ─────
 ## Requirements
 
 - macOS or Linux, Node.js 20 or newer.
-- [Claude Code](https://docs.claude.com/en/docs/claude-code) installed (`claude` on your PATH) and either a Claude subscription or an Anthropic API key.
+- [Claude Code](https://docs.claude.com/en/docs/claude-code) installed (`claude` on your PATH) and an [Anthropic API key](https://console.anthropic.com). See [Claude credentials](#claude-credentials).
 - For Slack: a workspace where you can create apps, and a public HTTPS address for your receiver (a server with a domain, or a tunnel while testing).
 
 ---
@@ -49,7 +49,7 @@ schedule ──▶ scripts/run-automation.sh ──▶ claude -p ─────
    npm install
    cp .env.example .env
    ```
-2. **Give headless Claude credentials.** Run `claude setup-token`, then paste the token into `.env` as `CLAUDE_CODE_OAUTH_TOKEN=`. (Or set `ANTHROPIC_API_KEY=` to bill per token.)
+2. **Add your Anthropic API key** to `.env` as `ANTHROPIC_API_KEY=`. Create one at [console.anthropic.com](https://console.anthropic.com).
 3. **Check the setup.** This validates your config and runs the offline tests (no Slack, no Claude, no cost):
    ```bash
    npm test
@@ -66,6 +66,16 @@ schedule ──▶ scripts/run-automation.sh ──▶ claude -p ─────
    It writes `files/kb-digest.md` and logs the run to `logs/runs.jsonl`.
 
 Then replace the example page in `kb/company/` with real knowledge about your company, and ask again.
+
+### Claude credentials
+
+Every agent turn is a Claude Code run, and it needs a credential.
+
+- **Use an API key** (`ANTHROPIC_API_KEY` in `.env`). Anthropic's terms say products built on Claude Code or the Agent SDK should use API key authentication, and they don't allow serving other people through a Free, Pro, Max, or Ultra plan. A Slack agent your team talks to is exactly that case. Source: [Claude Code legal and compliance](https://code.claude.com/docs/en/legal-and-compliance).
+- **A subscription is for you alone.** If nobody but you ever talks to your agents, Claude Code can also run on your own Claude login. Check Anthropic's current terms before relying on that; they don't settle this case explicitly.
+- **No key set?** `claude` falls back to whatever login is on the machine, which may be your personal subscription. The receiver and the automation runner print a warning when `ANTHROPIC_API_KEY` is missing, so this never happens silently.
+
+Set a spend limit for the key in the Anthropic Console. Every turn's cost is logged in `logs/slack-agent/runs.jsonl` and `logs/runs.jsonl`.
 
 ---
 
@@ -243,9 +253,20 @@ All local, all gitignored, under `logs/`:
 ## Troubleshooting
 
 - **Agent never replies in Slack.** Check the receiver's output. `401` = wrong signing secret. `503` = that agent's two Slack values are missing from `.env`. Nothing logged at all = Slack isn't reaching your host (check the Request URL under *Event Subscriptions*).
-- **"hit an error on that one".** Read the last line of `logs/slack-agent/failures.jsonl`. An auth error means headless Claude has no valid credential: set `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` in `.env`. Test it with `npm run ask -- scout "hi"`, not with `claude` in your own shell, which uses your interactive login instead.
+- **"hit an error on that one".** Read the last line of `logs/slack-agent/failures.jsonl`. An auth error means headless Claude has no valid credential: set `ANTHROPIC_API_KEY` in `.env`. Test it with `npm run ask -- scout "hi"`, not with `claude` in your own shell, which uses your interactive login instead.
 - **Agent says a tool isn't available.** It's not in that agent's caller in `config/gateway.yaml`, or the upstream didn't connect (the gateway prints `<prefix> unavailable` on stderr). `npm run smoke-test -- slack-<slug>` shows exactly what it sees.
 - **Automation logs `ok` but did nothing.** Check `denials` in `logs/runs.jsonl`. A prompt asking for a command its `allowed_tools` doesn't grant fails quietly, one denial at a time.
+
+## Security
+
+Treat your agents like a new teammate with keys to exactly what you gave them, and no more.
+
+- **Anyone who can message an agent can steer it.** That includes everyone in the Slack channels it's in, and the content of every thread and page it reads (prompt injection). The allowlist in `config/gateway.yaml` is the real boundary, not the persona. Grant each agent only the tools its job needs.
+- **Keep destructive and outbound actions absent.** The default `hard_deny` removes send, delete, trash, and merge tools for every caller. Add anything else that must never happen without a human.
+- **Repo work goes through pull requests.** `autoMerge` belongs only on repos with branch protection and a required CI check.
+- **Secrets stay in `.env`.** It's gitignored and the gateway refuses to read it. Agents get a Slack token only if they have `crossPostChannels`.
+- **Data leaves your machine** to Anthropic on every turn, to Slack for every reply, and to OpenRouter only if you set `OPENROUTER_API_KEY` (it enables the `second_opinion` tool). Don't put anything in `kb/` you wouldn't send to those services.
+- **Review `logs/toolcalls.jsonl`** now and then. Every gateway call is recorded with the caller and the tool.
 
 ## Gotchas
 

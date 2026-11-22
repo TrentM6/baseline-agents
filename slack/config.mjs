@@ -47,6 +47,17 @@ export function loadSharedEnv() {
   for (const [k, v] of Object.entries(shared)) if (process.env[k] === undefined) process.env[k] = v;
 }
 
+/** Warn (never fail) when no API key is configured: `claude` then falls back
+ * to whatever login is on the machine, possibly a personal subscription, which
+ * Anthropic's terms don't allow for agents other people talk to. */
+export function warnIfNoApiKey(where) {
+  if (process.env.ANTHROPIC_API_KEY) return;
+  console.error(
+    `[${where}] WARNING: ANTHROPIC_API_KEY is not set, so Claude Code will use whatever login is on this machine. ` +
+      "Agents that other people talk to need an API key — see README → Claude credentials."
+  );
+}
+
 /** Live value of one env key: process.env first, then a fresh read of .env. */
 export function envValue(key) {
   if (process.env[key]) return process.env[key];
